@@ -25,6 +25,17 @@ export async function getState(kelompok, tanggal) {
   return out.data
 }
 
+// Daftar staf untuk layar login (tanpa PIN).
+export async function getUsers() {
+  ensureUrl()
+  const url = new URL(GAS_URL)
+  url.searchParams.set('action', 'getUsers')
+  const res = await fetch(url.toString(), { method: 'GET', redirect: 'follow' })
+  const out = await res.json()
+  if (!out.ok) throw new Error(out.error || 'Gagal memuat daftar staf.')
+  return out.data
+}
+
 // WRITE — POST text/plain agar tidak kena CORS preflight di GAS.
 async function post(action, payload) {
   ensureUrl()
@@ -39,6 +50,7 @@ async function post(action, payload) {
   return out.data
 }
 
+export const login = (payload) => post('login', payload)
 export const savePakai = (payload) => post('savePakai', payload)
 export const saveMasuk = (payload) => post('saveMasuk', payload)
 export const saveOpname = (payload) => post('saveOpname', payload)

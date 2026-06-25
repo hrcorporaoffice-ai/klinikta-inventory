@@ -29,6 +29,7 @@ var SHEETS = {
   pakai: 'transaksi_pakai',
   opname: 'opname',
   rekap: 'rekap_bulanan',
+  users: 'users',
 };
 
 var DRIVE_FOLDER_NAME = 'INVENTORY_KLINIKTA_Bukti'; // folder bukti faktur/foto (Drive terpisah)
@@ -44,7 +45,16 @@ var HEADERS = {
   opname: ['timestamp', 'tanggal', 'kelompok', 'kode', 'nama', 'stokSistem',
            'stokFisik', 'selisih', 'user', 'catatan'],
   rekap:  ['periode', 'kelompok', 'totalPembelian', 'totalHpp', 'dibuat'],
+  users:  ['nama', 'pin', 'kelompok', 'aktif'],
 };
+
+// Staf contoh — GANTI nama & PIN ini di sheet "users" sesuai staf asli KLINIKTA.
+var USERS_SEED = [
+  ['Staf Gigi', '1111', 'BHP Gigi', true],
+  ['Staf Umum', '2222', 'BHP Umum', true],
+  ['Staf Obat', '3333', 'Obat', true],
+  ['Admin',     '0000', 'BHP Gigi', true],
+];
 
 // ----------------------------------------------------------------------------
 // SETUP — jalankan sekali secara manual dari editor Apps Script
@@ -53,17 +63,19 @@ function setup() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) throw new Error('Buka script ini dari dalam Google Sheet (Extensions > Apps Script).');
 
+  // Idempoten: aman dijalankan ulang. Hanya tulis baris header; TIDAK menghapus data
+  // yang sudah ada (mis. staf/master yang sudah diedit Dok).
   Object.keys(SHEETS).forEach(function (key) {
     var name = SHEETS[key];
     var sh = ss.getSheetByName(name) || ss.insertSheet(name);
     var header = HEADERS[key];
-    sh.clear();
     sh.getRange(1, 1, 1, header.length).setValues([header])
       .setFontWeight('bold').setBackground('#29517F').setFontColor('#ffffff');
     sh.setFrozenRows(1);
   });
 
   seedMaster_(ss);
+  seedUsers_(ss);
   ensureDriveFolder_();
 
   // Hapus sheet default "Sheet1" jika masih kosong/ada.
@@ -81,6 +93,7 @@ function seedMaster_(ss) {
     throw new Error('master_seed.gs belum ditempel. Tambahkan file itu lalu jalankan setup() lagi.');
   }
   var sh = ss.getSheetByName(SHEETS.master);
+  if (sh.getLastRow() > 1) return; // sudah terisi, jangan timpa
   var rows = MASTER_SEED.map(function (it) {
     return [it.kode, it.nama, it.kelompok, it.kategoriProduk, it.subKategori,
             it.satuan, it.kemasan, it.hargaAcuan, it.kategoriDefault,
@@ -89,6 +102,13 @@ function seedMaster_(ss) {
   if (rows.length) {
     sh.getRange(2, 1, rows.length, HEADERS.master.length).setValues(rows);
   }
+}
+
+function seedUsers_(ss) {
+  var sh = ss.getSheetByName(SHEETS.users);
+  // Hanya seed bila masih kosong, supaya tidak menimpa staf yang sudah diedit.
+  if (sh.getLastRow() > 1) return;
+  sh.getRange(2, 1, USERS_SEED.length, HEADERS.users.length).setValues(USERS_SEED);
 }
 
 function ensureDriveFolder_() {
@@ -109,6 +129,7 @@ function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || 'getState';
   try {
     if (action === 'ping') return json_({ ok: true, service: 'klinikta-inventory', version: 1 });
+    if (action === 'getUsers') return json_({ ok: true, data: listUsers_() });
     if (action === 'getState') {
       return json_({ ok: true, data: getState_(e.parameter.kelompok || null, e.parameter.tanggal || null) });
     }
@@ -126,6 +147,19 @@ function doPost(e) {
     return json_({ ok: false, error: 'Body bukan JSON valid.' });
   }
   var action = body.action;
+
+  // Login tidak butuh lock (hanya baca + verifikasi PIN).
+  if (action === 'login') {
+    try {
+      return json_({ ok: true, data: login_(body.nama, body.pin) });
+    } catch (err) {
+      return json_({ ok: false, error: String(err && err.message || err) });
+    }
+  }
+
+  // Tulis wajib menyertakan nama staf yang sudah login.
+  if (!body.user) return json_({ ok: false, error: 'Belum login: nama staf wajib ada.' });
+
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(20000); // cegah tulisan bersamaan dari banyak HP
@@ -142,6 +176,27 @@ function doPost(e) {
   } finally {
     try { lock.releaseLock(); } catch (e2) {}
   }
+}
+
+// ----------------------------------------------------------------------------
+// USERS: daftar staf + login PIN ringan
+// ----------------------------------------------------------------------------
+function listUsers_() {
+  return readSheet_(SHEETS.users)
+    .filter(function (u) { return u.nama && u.aktif !== false && String(u.aktif) !== 'false'; })
+    .map(function (u) { return { nama: String(u.nama), kelompok: u.kelompok || 'BHP Gigi' }; });
+}
+
+function login_(nama, pin) {
+  if (!nama || pin == null || pin === '') throw new Error('Nama dan PIN wajib diisi.');
+  var rows = readSheet_(SHEETS.users);
+  var found = null;
+  rows.forEach(function (u) {
+    if (String(u.nama) === String(nama) && u.aktif !== false && String(u.aktif) !== 'false') found = u;
+  });
+  if (!found) throw new Error('Staf tidak ditemukan / tidak aktif.');
+  if (String(found.pin) !== String(pin)) throw new Error('PIN salah.');
+  return { nama: String(found.nama), kelompok: found.kelompok || 'BHP Gigi' };
 }
 
 // ----------------------------------------------------------------------------
@@ -285,7 +340,10 @@ function readSheet_(name) {
     var o = {};
     head.forEach(function (h, i) { o[h] = row[i]; });
     return o;
-  }).filter(function (o) { return o.kode || o.timestamp; });
+  }).filter(function (o) {
+    // Buang baris yang benar-benar kosong (semua sel kosong).
+    return Object.keys(o).some(function (k) { return o[k] !== '' && o[k] != null; });
+  });
 }
 
 function sumBy_(rows, keyField, valField) {

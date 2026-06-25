@@ -42,7 +42,14 @@ SPEK_TEKNIS_Inventory_KLINIKTA.md   Spesifikasi & aturan main Akoontan
 ```
 
 ## Sheet database
-`setup()` membuat: `master_item`, `transaksi_masuk`, `transaksi_pakai`, `opname`, `rekap_bulanan`.
+`setup()` membuat: `master_item`, `transaksi_masuk`, `transaksi_pakai`, `opname`,
+`rekap_bulanan`, dan `users` (staf + PIN). Aman dijalankan ulang (tidak menimpa data).
+
+## Login staf & log "siapa input"
+Staf login dengan **memilih nama + PIN ringan** (diatur di sheet `users`). Nama staf
+otomatis tercatat di kolom `user` tiap baris log, plus `timestamp` (jam) — jadi di
+spreadsheet langsung terbaca siapa mencatat apa dan kapan. Ganti staf via tombol
+"Ganti" di header.
 
 ## Roadmap
 - **Tahap 1 (ini):** Web app BHP Gigi, simpan ke Sheets.

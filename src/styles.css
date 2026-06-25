@@ -17,6 +17,22 @@ header{background:var(--navy);color:#fff;padding:14px 16px;border-radius:0 0 14p
 .brand .dot{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--blue),var(--red));display:grid;place-items:center;font-size:13px}
 .brand small{display:block;font-weight:400;font-size:11px;opacity:.8;letter-spacing:0}
 .period{background:rgba(255,255,255,.14);padding:6px 10px;border-radius:8px;font-size:13px}
+.huser{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.who{background:rgba(255,255,255,.14);padding:6px 10px;border-radius:8px;font-size:13px;font-weight:600}
+.logout{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:8px;padding:6px 10px;font-size:12.5px;cursor:pointer}
+.logout:hover{background:rgba(255,255,255,.12)}
+
+/* Login */
+.login-wrap{max-width:380px;margin:0 auto;padding:48px 16px 24px;text-align:center}
+.login-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 20px;text-align:left;box-shadow:0 8px 30px rgba(41,81,127,.10)}
+.login-brand{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--navy);justify-content:center;margin-bottom:6px}
+.login-brand .dot{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--blue),var(--red));display:grid;place-items:center;font-size:16px}
+.login-brand small{display:block;font-weight:400;font-size:11px;color:var(--muted)}
+.login-hint{font-size:13px;color:var(--muted);text-align:center;margin:6px 0 16px}
+.lbl{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 5px;font-weight:600}
+.login-input{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;outline:none;background:#fff}
+.login-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,110,182,.12)}
+.login-err{margin-top:12px;background:#fdeaea;color:var(--low);padding:9px 12px;border-radius:9px;font-size:13px}
 
 /* Group switcher */
 .groups{display:flex;gap:7px;margin:16px 0 4px;align-items:center;flex-wrap:wrap}

@@ -26,9 +26,25 @@ function todayParts() {
 }
 
 export default function App() {
+  const [user, setUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('inv_user') || 'null') } catch { return null }
+  })
+
+  if (!user) {
+    return <Login onLogin={(u) => { localStorage.setItem('inv_user', JSON.stringify(u)); setUser(u) }} />
+  }
+  return (
+    <InventoryApp
+      user={user}
+      onLogout={() => { localStorage.removeItem('inv_user'); setUser(null) }}
+    />
+  )
+}
+
+function InventoryApp({ user, onLogout }) {
   const { tanggal: today, lengkap, periode } = useMemo(todayParts, [])
 
-  const [myGroup] = useState(() => localStorage.getItem('inv_myGroup') || 'BHP Gigi')
+  const myGroup = user.kelompok || 'BHP Gigi'
   const [group, setGroup] = useState(myGroup)
   const [mode, setMode] = useState('pakai')
 
@@ -137,17 +153,17 @@ export default function App() {
         const lines = Object.entries(inputs)
           .map(([kode, v]) => ({ kode, qty: Number(v) }))
           .filter((l) => l.qty > 0)
-        res = await api.savePakai({ kelompok: group, tanggal: today, lines })
+        res = await api.savePakai({ kelompok: group, tanggal: today, user: user.nama, lines })
       } else if (mode === 'opname') {
         const lines = Object.entries(inputs)
           .filter(([, v]) => v !== '' && v != null && !isNaN(Number(v)))
           .map(([kode, v]) => ({ kode, stokFisik: Number(v) }))
-        res = await api.saveOpname({ kelompok: group, tanggal: today, lines })
+        res = await api.saveOpname({ kelompok: group, tanggal: today, user: user.nama, lines })
       } else {
         const lines = Object.entries(inputs)
           .map(([kode, v]) => ({ kode, qty: Number(v?.qty), harga: Number(v?.harga) || 0, supplier, noFaktur }))
           .filter((l) => l.qty > 0)
-        res = await api.saveMasuk({ kelompok: group, tanggal: today, lines })
+        res = await api.saveMasuk({ kelompok: group, tanggal: today, user: user.nama, lines })
       }
       showToast('ok', `Tersimpan: ${res.tersimpan} item.`)
       setInputs({}); setSupplier(''); setNoFaktur('')
@@ -169,7 +185,11 @@ export default function App() {
             <span className="dot">📦</span>
             <div>KLINIKTA Inventory<small>Stok BHP &amp; Obat</small></div>
           </div>
-          <div className="period">{periode}</div>
+          <div className="huser">
+            <span className="period">{periode}</span>
+            <span className="who" title="Staf yang login">👤 {user.nama}</span>
+            <button className="logout" onClick={onLogout}>Ganti</button>
+          </div>
         </div>
       </header>
 
@@ -289,6 +309,72 @@ export default function App() {
 
       {toast && <div className={'toast ' + toast.type}>{toast.msg}</div>}
     </>
+  )
+}
+
+// ---------------- Login (pemilih staf + PIN ringan) ----------------
+function Login({ onLogin }) {
+  const [users, setUsers] = useState(null)
+  const [nama, setNama] = useState('')
+  const [pin, setPin] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    api.getUsers()
+      .then((list) => { setUsers(list); if (list[0]) setNama(list[0].nama) })
+      .catch((e) => setErr(e.message))
+  }, [])
+
+  async function submit(e) {
+    e.preventDefault()
+    if (!nama || !pin || busy) return
+    setBusy(true); setErr('')
+    try {
+      const u = await api.login({ nama, pin })
+      onLogin(u)
+    } catch (e2) {
+      setErr(e2.message); setBusy(false)
+    }
+  }
+
+  return (
+    <div className="login-wrap">
+      <form className="login-card" onSubmit={submit}>
+        <div className="login-brand">
+          <span className="dot">📦</span>
+          <div>KLINIKTA Inventory<small>Stok BHP &amp; Obat</small></div>
+        </div>
+        <p className="login-hint">Pilih nama Anda lalu masukkan PIN untuk mulai mencatat.</p>
+
+        {users === null && !err ? (
+          <div className="state"><span className="spin" />Memuat daftar staf…</div>
+        ) : (
+          <>
+            <label className="lbl">Nama staf</label>
+            <select className="login-input" value={nama} onChange={(e) => setNama(e.target.value)}>
+              {(users || []).map((u) => (
+                <option key={u.nama} value={u.nama}>{u.nama} — {u.kelompok}</option>
+              ))}
+            </select>
+
+            <label className="lbl">PIN</label>
+            <input
+              className="login-input" type="password" inputMode="numeric"
+              placeholder="••••" value={pin} autoFocus
+              onChange={(e) => setPin(e.target.value)}
+            />
+
+            <button className="btn" type="submit" disabled={busy || !nama || !pin} style={{ width: '100%', marginTop: 6 }}>
+              {busy ? 'Memeriksa…' : 'Masuk'}
+            </button>
+          </>
+        )}
+
+        {err && <div className="login-err">⚠️ {err}</div>}
+      </form>
+      <p className="note">Daftar staf & PIN diatur di sheet <b>users</b>.</p>
+    </div>
   )
 }
 

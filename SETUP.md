@@ -38,6 +38,19 @@ Catat semua ID inventory di tabel paling bawah dokumen ini, terpisah dari absens
      `rekap_bulanan` terisi, dan folder Drive `INVENTORY_KLINIKTA_Bukti` dibuat.
    - Cek tab **Execution log** muncul `Setup selesai`.
 
+### Atur Staf & PIN (penting untuk log "siapa input")
+Setelah `setup()`, buka sheet **`users`**. Sudah terisi contoh
+(`Staf Gigi/1111`, `Staf Umum/2222`, `Staf Obat/3333`, `Admin/0000`).
+**Ganti** kolom `nama` & `pin` sesuai staf asli KLINIKTA:
+| nama | pin | kelompok | aktif |
+|---|---|---|---|
+| (nama staf) | (4 digit) | BHP Gigi / BHP Umum / Obat | TRUE |
+
+Saat staf login di app, nama mereka otomatis ikut tercatat di setiap baris
+`transaksi_pakai` / `transaksi_masuk` / `opname` (kolom `user` + `timestamp` jam),
+sehingga di spreadsheet kelihatan **siapa input apa, kapan**. Untuk menonaktifkan
+staf: set `aktif` = FALSE (jangan dihapus, agar log lama tetap utuh).
+
 ## Langkah 3 — Deploy GAS sebagai Web App
 1. Tombol **Deploy → New deployment**.
 2. ⚙ (gear) → pilih tipe **Web app**.
