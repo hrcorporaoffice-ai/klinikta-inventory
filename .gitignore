@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.env.local
+.DS_Store
+*.log
+.vercel
+
+# Sumber data mentah — bukan bagian dari kode aplikasi
+Master_Persediaan_KLINIKTA.xlsx

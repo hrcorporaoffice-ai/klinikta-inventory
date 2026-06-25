@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KLINIKTA · Inventory (Mockup)</title>
+<style>
+  :root{
+    --navy:#29517F; --blue:#006EB6; --red:#EE3338;
+    --ink:#1f2a37; --muted:#6b7280; --line:#e5e7eb;
+    --bg:#f6f8fb; --card:#ffffff; --ok:#1f9d6b; --warn:#e0a800; --low:#EE3338;
+    --soft:#eef3f9;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.4}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 14px 80px}
+
+  /* Header */
+  header{background:var(--navy);color:#fff;padding:14px 16px;border-radius:0 0 14px 14px;position:sticky;top:0;z-index:20}
+  .hrow{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.3px}
+  .brand .dot{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--blue),var(--red));display:grid;place-items:center;font-size:13px}
+  .brand small{display:block;font-weight:400;font-size:11px;opacity:.8;letter-spacing:0}
+  .period{background:rgba(255,255,255,.14);padding:6px 10px;border-radius:8px;font-size:13px}
+  .tagmock{display:inline-block;background:var(--red);color:#fff;font-size:10px;padding:2px 8px;border-radius:5px;letter-spacing:.5px;vertical-align:middle;margin-left:6px}
+
+  /* Group switcher */
+  .groups{display:flex;gap:7px;margin:16px 0 4px;align-items:center;flex-wrap:wrap}
+  .glabel{font-size:12px;color:var(--muted);margin-right:2px}
+  .gbtn{background:var(--card);border:1.5px solid var(--line);border-radius:20px;padding:7px 15px;font-size:13.5px;font-weight:600;cursor:pointer;color:var(--muted)}
+  .gbtn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .gbtn .cnt{opacity:.6;font-weight:400;font-size:12px}
+  .gbtn.active .cnt{opacity:.85}
+  .crossnote{font-size:11.5px;color:var(--muted);margin:4px 2px 0}
+
+  /* Mode tabs */
+  .tabs{display:flex;gap:8px;margin:16px 0 12px;flex-wrap:wrap}
+  .tab{flex:1;min-width:130px;background:var(--card);border:1.5px solid var(--line);border-radius:11px;padding:11px 12px;cursor:pointer;transition:.15s}
+  .tab .t-top{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px}
+  .tab .t-sub{font-size:12px;color:var(--muted);margin-top:3px}
+  .tab.active{border-color:var(--blue);background:#f0f7fc;box-shadow:0 2px 8px rgba(0,110,182,.10)}
+  .tab.active .t-top{color:var(--blue)}
+  .chip{width:9px;height:9px;border-radius:50%}
+  .chip.b{background:var(--blue)} .chip.r{background:var(--red)} .chip.n{background:var(--navy)}
+
+  /* Toolbar */
+  .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+  .search{flex:1;min-width:180px;display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:9px 12px}
+  .search input{border:none;outline:none;font-size:14px;width:100%;background:transparent}
+  .filter{background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13px;color:var(--ink);cursor:pointer}
+  .filter.on{border-color:var(--navy);background:var(--soft);font-weight:600}
+
+  /* Grid card */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .cap{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line);background:#fcfdff}
+  .cap h2{font-size:15px;color:var(--navy)}
+  .cap .meta{font-size:12px;color:var(--muted)}
+
+  /* Desktop table */
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  thead th{background:#f3f6fa;color:var(--navy);font-weight:600;text-align:left;padding:10px 12px;font-size:12.5px;border-bottom:1px solid var(--line)}
+  thead th.num{text-align:center;width:140px}
+  tbody td{padding:9px 12px;border-bottom:1px solid #f0f2f5;vertical-align:middle}
+  tbody tr:hover{background:#fafcff}
+  .grp{background:var(--soft);font-weight:700;color:var(--navy);font-size:12px;letter-spacing:.4px;text-transform:uppercase}
+  .grp td{padding:7px 12px}
+  .item-name{font-weight:600;display:flex;align-items:center;gap:7px}
+  .item-sub{font-size:11.5px;color:var(--muted)}
+  .stk{display:inline-flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+  .badge{font-size:11px;padding:2px 7px;border-radius:20px;font-weight:600}
+  .badge.ok{background:#e7f6ef;color:var(--ok)}
+  .badge.warn{background:#fdf6e3;color:var(--warn)}
+  .badge.low{background:#fdeaea;color:var(--low)}
+  .unit{color:var(--muted);font-size:12px}
+  .tag-detail{font-size:9.5px;background:#ede9fe;color:#6d28d9;padding:1px 6px;border-radius:9px;font-weight:600;letter-spacing:.2px}
+
+  /* number input cell */
+  .qty{width:88px;text-align:center;padding:8px;border:1.5px solid var(--line);border-radius:9px;font-size:15px;font-variant-numeric:tabular-nums;outline:none;transition:.15s;background:#fff}
+  .qty:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,110,182,.12)}
+  .qty.filled{border-color:var(--blue);background:#f0f7fc;font-weight:700;color:var(--blue)}
+  td.num{text-align:center}
+
+  /* Mobile cards */
+  .mlist{display:none}
+  .mcard{display:flex;align-items:center;gap:12px;padding:11px 13px;border-bottom:1px solid #f0f2f5}
+  .mcard .info{flex:1;min-width:0}
+  .mcard .info .n{font-weight:600;font-size:14.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .mcard .info .s{font-size:11.5px;color:var(--muted);display:flex;gap:8px;align-items:center;margin-top:2px}
+  .mqty{display:flex;align-items:center;flex-shrink:0}
+  .mqty button{width:38px;height:40px;border:1.5px solid var(--line);background:#fff;font-size:20px;color:var(--blue);cursor:pointer}
+  .mqty button:first-child{border-radius:9px 0 0 9px}
+  .mqty button:last-child{border-radius:0 9px 9px 0}
+  .mqty input{width:54px;height:40px;text-align:center;border:1.5px solid var(--line);border-left:none;border-right:none;font-size:16px;font-variant-numeric:tabular-nums;outline:none}
+
+  /* Sticky save bar */
+  .savebar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:11px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;z-index:30;box-shadow:0 -4px 16px rgba(0,0,0,.05)}
+  .savebar .sum{font-size:13px;color:var(--muted)}
+  .savebar .sum b{color:var(--navy);font-size:15px}
+  .btn{background:var(--blue);color:#fff;border:none;padding:12px 22px;border-radius:11px;font-size:15px;font-weight:600;cursor:pointer}
+  .btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--line)}
+
+  .note{font-size:12px;color:var(--muted);margin:14px 2px;text-align:center;line-height:1.6}
+
+  @media(max-width:760px){
+    table{display:none}
+    .mlist{display:block}
+    .cap .meta{display:none}
+    .tab{min-width:calc(33% - 6px)}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <div class="brand">
+      <span class="dot">📦</span>
+      <div>KLINIKTA Inventory <span class="tagmock">MOCKUP</span><small>Stok BHP &amp; Obat</small></div>
+    </div>
+    <div class="period">Juni 2026</div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- Group switcher -->
+  <div class="groups">
+    <span class="glabel">Kelompok:</span>
+    <button class="gbtn active">BHP Gigi <span class="cnt">61</span></button>
+    <button class="gbtn">BHP Umum <span class="cnt">35</span></button>
+    <button class="gbtn">Obat <span class="cnt">27</span></button>
+  </div>
+  <div class="crossnote">Anda pegang <b>BHP Gigi</b>. Bisa lihat kelompok lain untuk cek agar tidak input ganda.</div>
+
+  <!-- Mode selection (v1 order & wording) -->
+  <div class="tabs">
+    <div class="tab active">
+      <div class="t-top"><span class="chip b"></span>Pemakaian Hari Ini</div>
+      <div class="t-sub">Isi yang terpakai hari ini</div>
+    </div>
+    <div class="tab">
+      <div class="t-top"><span class="chip n"></span>Stok Opname</div>
+      <div class="t-sub">Hitung sisa fisik berkala</div>
+    </div>
+    <div class="tab">
+      <div class="t-top"><span class="chip r"></span>Barang Masuk</div>
+      <div class="t-sub">Catat pembelian diterima</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="search">🔍<input placeholder="Cari item… (mis. komposit, paper point)"></div>
+    <div class="filter on">Semua</div>
+    <div class="filter">Komposit</div>
+    <div class="filter">Endo</div>
+    <div class="filter">Ortho</div>
+  </div>
+
+  <!-- The grid -->
+  <div class="card">
+    <div class="cap">
+      <h2>Pemakaian Hari Ini · Kamis, 25 Juni 2026</h2>
+      <span class="meta">61 item · isi hanya yang dipakai</span>
+    </div>
+
+    <!-- Desktop table -->
+    <table>
+      <thead>
+        <tr><th>Item</th><th>Stok Saat Ini</th><th class="num">Pemakaian Hari Ini</th></tr>
+      </thead>
+      <tbody>
+        <tr class="grp"><td colspan="3">Komposit</td></tr>
+        <tr>
+          <td><div class="item-name">Komposit A2</div><div class="item-sub">syringe · 3,8 gr</div></td>
+          <td><span class="stk">4 <span class="unit">syringe</span> <span class="badge warn">menipis</span></span></td>
+          <td class="num"><input class="qty filled" value="1"></td>
+        </tr>
+        <tr>
+          <td><div class="item-name">Komposit A3</div><div class="item-sub">syringe · 3,8 gr</div></td>
+          <td><span class="stk">4 <span class="unit">syringe</span> <span class="badge warn">menipis</span></span></td>
+          <td class="num"><input class="qty" placeholder="0"></td>
+        </tr>
+        <tr>
+          <td><div class="item-name">Komposit UD3 <span class="tag-detail">DETAIL</span></div><div class="item-sub">syringe · 5 gr</div></td>
+          <td><span class="stk">5 <span class="unit">syringe</span> <span class="badge ok">aman</span></span></td>
+          <td class="num"><input class="qty" placeholder="0"></td>
+        </tr>
+        <tr>
+          <td><div class="item-name">Flowable A2</div><div class="item-sub">syringe · 2 ml</div></td>
+          <td><span class="stk">8 <span class="unit">syringe</span> <span class="badge ok">aman</span></span></td>
+          <td class="num"><input class="qty filled" value="2"></td>
+        </tr>
+
+        <tr class="grp"><td colspan="3">Bonding / Etsa</td></tr>
+        <tr>
+          <td><div class="item-name">Etsa</div><div class="item-sub">botol · 3 ml</div></td>
+          <td><span class="stk">41 <span class="unit">botol</span> <span class="badge ok">aman</span></span></td>
+          <td class="num"><input class="qty" placeholder="0"></td>
+        </tr>
+        <tr>
+          <td><div class="item-name">Bonding</div><div class="item-sub">botol · 5 ml</div></td>
+          <td><span class="stk">2 <span class="unit">botol</span> <span class="badge low">stok rendah</span></span></td>
+          <td class="num"><input class="qty filled" value="1"></td>
+        </tr>
+
+        <tr class="grp"><td colspan="3">Pengisian Saluran Akar (Endo)</td></tr>
+        <tr>
+          <td><div class="item-name">Paper Point F1,F2,F3</div><div class="item-sub">pack · 60 pcs</div></td>
+          <td><span class="stk">24 <span class="unit">pack</span> <span class="badge ok">aman</span></span></td>
+          <td class="num"><input class="qty" placeholder="0"></td>
+        </tr>
+        <tr>
+          <td><div class="item-name">Gutta Percha F3</div><div class="item-sub">pack · 60 pcs</div></td>
+          <td><span class="stk">11 <span class="unit">pack</span> <span class="badge ok">aman</span></span></td>
+          <td class="num"><input class="qty filled" value="3"></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Mobile list -->
+    <div class="mlist">
+      <div class="mcard">
+        <div class="info"><div class="n">Komposit A2</div><div class="s">4 syringe <span class="badge warn">menipis</span></div></div>
+        <div class="mqty"><button>−</button><input value="1"><button>+</button></div>
+      </div>
+      <div class="mcard">
+        <div class="info"><div class="n">Komposit A3</div><div class="s">4 syringe <span class="badge warn">menipis</span></div></div>
+        <div class="mqty"><button>−</button><input placeholder="0"><button>+</button></div>
+      </div>
+      <div class="mcard">
+        <div class="info"><div class="n">Komposit UD3 <span class="tag-detail">DETAIL</span></div><div class="s">5 syringe <span class="badge ok">aman</span></div></div>
+        <div class="mqty"><button>−</button><input placeholder="0"><button>+</button></div>
+      </div>
+      <div class="mcard">
+        <div class="info"><div class="n">Flowable A2</div><div class="s">8 syringe <span class="badge ok">aman</span></div></div>
+        <div class="mqty"><button>−</button><input value="2"><button>+</button></div>
+      </div>
+      <div class="mcard">
+        <div class="info"><div class="n">Etsa</div><div class="s">41 botol <span class="badge ok">aman</span></div></div>
+        <div class="mqty"><button>−</button><input placeholder="0"><button>+</button></div>
+      </div>
+      <div class="mcard">
+        <div class="info"><div class="n">Bonding</div><div class="s">2 botol <span class="badge low">stok rendah</span></div></div>
+        <div class="mqty"><button>−</button><input value="1"><button>+</button></div>
+      </div>
+      <div class="mcard">
+        <div class="info"><div class="n">Paper Point F1,F2,F3</div><div class="s">24 pack <span class="badge ok">aman</span></div></div>
+        <div class="mqty"><button>−</button><input placeholder="0"><button>+</button></div>
+      </div>
+      <div class="mcard">
+        <div class="info"><div class="n">Gutta Percha F3</div><div class="s">11 pack <span class="badge ok">aman</span></div></div>
+        <div class="mqty"><button>−</button><input value="3"><button>+</button></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">
+    Tampilan ini contoh (mockup) — belum berfungsi.<br>
+    Coba ubah lebar jendela browser, atau buka di HP, untuk lihat tampilan berubah dari tabel jadi daftar.
+  </p>
+</div>
+
+<!-- Sticky save -->
+<div class="savebar">
+  <div class="sum">3 item terisi · <b>total 6 unit dipakai</b></div>
+  <div style="display:flex;gap:8px">
+    <button class="btn ghost">Reset</button>
+    <button class="btn">Simpan Pemakaian</button>
+  </div>
+</div>
+
+</body>
+</html>
