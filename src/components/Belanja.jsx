@@ -93,11 +93,11 @@ export default function Belanja({ user, today, onToast, onChanged }) {
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="cap"><h2>Catat Belanja Baru</h2><span className="meta">status awal: Dipesan</span></div>
 
-        <div className="bform">
-          <label>Tanggal pesan<input type="date" value={tanggalPesan} onChange={(e) => setTanggalPesan(e.target.value)} /></label>
-          <label>Sumber / No. pesanan<input placeholder="mis. Shopee 24061..." value={sumber} onChange={(e) => setSumber(e.target.value)} /></label>
+        <div className="bform belanja-head">
+          <label>Tanggal Pesan<input type="date" value={tanggalPesan} onChange={(e) => setTanggalPesan(e.target.value)} /></label>
+          <label>No. VA Pembayaran<input placeholder="opsional" value={noVA} onChange={(e) => setNoVA(e.target.value)} /></label>
+          <label>Sumber / No. Pesanan<input placeholder="mis. Shopee 24061..." value={sumber} onChange={(e) => setSumber(e.target.value)} /></label>
           <label>Supplier / Toko<input placeholder="nama toko" value={supplier} onChange={(e) => setSupplier(e.target.value)} /></label>
-          <label>No. VA pembayaran<input placeholder="opsional" value={noVA} onChange={(e) => setNoVA(e.target.value)} /></label>
         </div>
 
         {/* Item rows — cukup nama, qty, harga */}
@@ -133,8 +133,8 @@ export default function Belanja({ user, today, onToast, onChanged }) {
 
         <div className="btotals">
           <div className="bt-line"><span>Subtotal Produk</span><b>{rupiah(calc.sumSub)}</b></div>
-          <div className="bt-line"><span>Biaya bersih (kirim/diskon/voucher/layanan)</span><b>{calc.net >= 0 ? '' : '− '}{rupiah(Math.abs(calc.net))}</b></div>
-          <div className="bt-line total"><span>Total bayar</span><b>{rupiah(calc.total)}</b></div>
+          <div className="bt-line"><span>Biaya Bersih (Kirim/Diskon/Voucher/Layanan)</span><b>{calc.net >= 0 ? '' : '− '}{rupiah(Math.abs(calc.net))}</b></div>
+          <div className="bt-line total"><span>Total Bayar</span><b>{rupiah(calc.total)}</b></div>
         </div>
         <div className="bsave">
           <button className="btn" disabled={!canSave} onClick={handleSave}>{saving ? 'Menyimpan…' : 'Simpan Belanja'}</button>
