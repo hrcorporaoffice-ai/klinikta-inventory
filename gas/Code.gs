@@ -209,6 +209,26 @@ function doPost(e) {
     }
   }
 
+  // MIRROR (RTDB = sumber kebenaran; ini hanya menyalin ke Sheets sbg log/cadangan).
+  // Dikirim app dengan fetch mode 'no-cors' (fire-and-forget), tidak butuh user.
+  if (action && action.indexOf('mirror_') === 0) {
+    var lkm = LockService.getScriptLock();
+    try {
+      lkm.waitLock(20000);
+      var rm;
+      switch (action) {
+        case 'mirror_pakai':   rm = mirrorAppend_(SHEETS.pakai, body.rows); break;
+        case 'mirror_opname':  rm = mirrorAppend_(SHEETS.opname, body.rows); break;
+        case 'mirror_belanja': rm = mirrorBelanja_(body.nota, body.items); break;
+        case 'mirror_antrian': rm = mirrorUpsert_(SHEETS.antrianAset, 'idAset', body.rows); break;
+        default: return json_({ ok: false, error: 'Mirror tak dikenal: ' + action });
+      }
+      return json_({ ok: true, data: rm });
+    } catch (errm) {
+      return json_({ ok: false, error: String(errm && errm.message || errm) });
+    } finally { try { lkm.releaseLock(); } catch (e3) {} }
+  }
+
   // Tulis wajib menyertakan nama staf yang sudah login.
   if (!body.user) return json_({ ok: false, error: 'Belum login: nama staf wajib ada.' });
 
@@ -627,8 +647,9 @@ function defaultKategori_(kelompok) {
 function uploadFile_(body) {
   var id = body.idBelanja, kind = body.kind;
   if (!body.dataBase64) throw new Error('File kosong.');
-  if (kind === 'faktur') requireRole_(body.user, ['logistik']);
-  else requireRole_(body.user, ['penerima']);  // foto barang
+  // Catatan: sejak pindah ke RTDB, daftar staf tepercaya ada di RTDB (bukan sheet users
+  // GAS ini). Cek peran sudah dilakukan di sisi app sebelum upload, jadi di sini hanya
+  // menyimpan file ke Drive tanpa enforcement peran.
 
   var parent = DriveApp.getFolderById(ensureDriveFolder_());
   var sub = getOrCreateSubfolder_(parent, kind === 'faktur' ? 'Faktur' : 'Foto Barang');
@@ -662,6 +683,63 @@ function updateAntrianAset_(body) {
   sh.getRange(rowIdx, col).setValue(val);
   SpreadsheetApp.flush();
   return { idAset: id, statusCatat: val };
+}
+
+// ----------------------------------------------------------------------------
+// MIRROR ke Sheets — RTDB tetap sumber kebenaran; ini cermin/log untuk akuntan.
+// Payload memakai NAMA KOLOM (header) sebagai kunci; nilai ditata sesuai urutan header.
+// ----------------------------------------------------------------------------
+function mirrorAppend_(sheetName, rows) {
+  if (!rows || !rows.length) return { appended: 0 };
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (!sh) throw new Error('Sheet belum ada: ' + sheetName);
+  var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  var out = rows.map(function (r) { return head.map(function (h) { return r[h] != null ? r[h] : ''; }); });
+  sh.getRange(sh.getLastRow() + 1, 1, out.length, head.length).setValues(out);
+  SpreadsheetApp.flush();
+  return { appended: out.length };
+}
+
+// Upsert berdasarkan kolom kunci: jika baris ada → timpa; jika belum → tambah.
+function mirrorUpsert_(sheetName, keyField, rows) {
+  if (!rows || !rows.length) return { upserted: 0 };
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (!sh) throw new Error('Sheet belum ada: ' + sheetName);
+  var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  rows.forEach(function (r) {
+    var line = head.map(function (h) { return r[h] != null ? r[h] : ''; });
+    var rowIdx = findRow_(sh, keyField, r[keyField]);
+    if (rowIdx > 0) sh.getRange(rowIdx, 1, 1, head.length).setValues([line]);
+    else sh.appendRow(line);
+  });
+  SpreadsheetApp.flush();
+  return { upserted: rows.length };
+}
+
+// Upsert satu nota belanja + tulis ulang seluruh item_belanja-nya agar sinkron dgn RTDB.
+function mirrorBelanja_(nota, items) {
+  if (!nota || !nota.idBelanja) throw new Error('nota.idBelanja wajib.');
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var shB = ss.getSheetByName(SHEETS.belanja);
+  var headB = shB.getRange(1, 1, 1, shB.getLastColumn()).getValues()[0];
+  var rowB = headB.map(function (h) { return nota[h] != null ? nota[h] : ''; });
+  var rowIdx = findRow_(shB, 'idBelanja', nota.idBelanja);
+  if (rowIdx > 0) shB.getRange(rowIdx, 1, 1, headB.length).setValues([rowB]);
+  else shB.appendRow(rowB);
+
+  var shI = ss.getSheetByName(SHEETS.itemBelanja);
+  var dataI = shI.getDataRange().getValues();
+  var cId = dataI[0].indexOf('idBelanja');
+  for (var i = dataI.length - 1; i >= 1; i--) {
+    if (String(dataI[i][cId]) === String(nota.idBelanja)) shI.deleteRow(i + 1);
+  }
+  if (items && items.length) {
+    var headI = shI.getRange(1, 1, 1, shI.getLastColumn()).getValues()[0];
+    var out = items.map(function (it) { return headI.map(function (h) { return it[h] != null ? it[h] : ''; }); });
+    shI.getRange(shI.getLastRow() + 1, 1, out.length, headI.length).setValues(out);
+  }
+  SpreadsheetApp.flush();
+  return { idBelanja: nota.idBelanja, items: (items || []).length };
 }
 
 // Daftar nota + itemnya (terbaru dulu).
