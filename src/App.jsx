@@ -301,7 +301,6 @@ function InventoryApp({ user, onLogout }) {
 }
 
 // ---------------- Login (pemilih staf + PIN ringan) ----------------
-const splitP = (p) => String(p || 'staf').split(',').map((r) => r.trim()).filter(Boolean)
 
 function Login({ onLogin }) {
   const [users, setUsers] = useState(null)
@@ -350,9 +349,6 @@ function Login({ onLogin }) {
     if (val.length === 4 && nama && !busy) doLogin(nama, val)
   }
 
-  const admins = (users || []).filter((u) => splitP(u.peran).includes('admin'))
-  const staf   = (users || []).filter((u) => !splitP(u.peran).includes('admin'))
-
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={(e) => { e.preventDefault(); doLogin(nama, pin) }}>
@@ -375,21 +371,12 @@ function Login({ onLogin }) {
 
         <div className="login-module">Inventory · Stok BHP &amp; Obat</div>
 
-        {users === null && !err ? (
-          <div className="state"><span className="spin" />Memuat daftar staf…</div>
-        ) : (
-          <>
-            <select className="login-input login-select" value={nama} onChange={(e) => setNama(e.target.value)} autoFocus={!nama}>
-              <option value="">— Pilih nama kamu —</option>
-              {staf.map((u) => <option key={u.nama} value={u.nama}>{u.nama}</option>)}
-              {admins.length > 0 && (
-                <optgroup label="Admin / Manager">
-                  {admins.map((u) => <option key={u.nama} value={u.nama}>👤 {u.nama}</option>)}
-                </optgroup>
-              )}
-            </select>
+        <select className="login-input login-select" value={nama} onChange={(e) => setNama(e.target.value)} autoFocus={!nama}>
+          <option value="">— Pilih nama kamu —</option>
+          {(users || []).map((u) => <option key={u.nama} value={u.nama}>{u.nama}</option>)}
+        </select>
 
-            {nama && (
+        {nama && (
               <>
                 <div className="pin-wrap">
                   <div className="pin-label">Masukan PIN 4 digit</div>
@@ -413,8 +400,6 @@ function Login({ onLogin }) {
                 </button>
               </>
             )}
-          </>
-        )}
 
         {err && <div className="login-err">{err}</div>}
       </form>
