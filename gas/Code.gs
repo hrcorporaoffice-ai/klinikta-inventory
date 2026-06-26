@@ -30,12 +30,19 @@ var SHEETS = {
   belanja: 'transaksi_belanja',     // satu baris per nota/pesanan
   itemBelanja: 'item_belanja',      // detail item per nota (many-to-one)
   antrianAset: 'antrian_aset',      // barang Aset yang belum dicatat ke Akoontan
+  klasifikasiKw: 'klasifikasi_kw',  // kata kunci tebakan klasifikasi (dikelola admin)
   rekap: 'rekap_bulanan',
   users: 'users',
 };
 
-// Klasifikasi yang menambah stok (dipetakan ke master). Selain ini tidak menambah stok.
-var KLAS_STOK = { 'BHP': true, 'Obat': true };
+// Status nota belanja, berurutan. Lihat alur peran di updateBelanjaStatus_/finalizeBelanja_.
+var STATUS_FLOW = ['Dipesan', 'Dibayar', 'Diterima', 'Masuk Stok'];
+// Kelompok yang dihitung sebagai Persediaan (aset lancar) di rekap LAPKEU.
+var KELOMPOK_PERSEDIAAN = { 'BHP Gigi': true, 'BHP Umum': true, 'Obat': true };
+// Semua kelompok stok yang valid sebagai tujuan saat "Masuk Stok".
+var KELOMPOK_STOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes'];
+// Prefix kode item master baru per kelompok (untuk tambah item saat finalisasi).
+var KODE_PREFIX = { 'BHP Gigi': 'BHPG-', 'BHP Umum': 'BHPU-', 'Obat': 'OBT-', 'Alkes': 'ALK-' };
 
 var DRIVE_FOLDER_NAME = 'INVENTORY_KLINIKTA_Bukti'; // folder bukti faktur/foto (Drive terpisah)
 var PROP_FOLDER_ID = 'INVENTORY_DRIVE_FOLDER_ID';
@@ -48,22 +55,41 @@ var HEADERS = {
   opname: ['timestamp', 'tanggal', 'kelompok', 'kode', 'nama', 'stokSistem',
            'stokFisik', 'selisih', 'user', 'catatan'],
   belanja: ['idBelanja', 'timestamp', 'tanggalPesan', 'tanggalTerima', 'sumber', 'supplier',
-            'subtotal', 'ongkir', 'diskon', 'totalNota', 'status', 'user', 'catatan'],
+            'noVA', 'subtotal', 'pengiriman', 'diskonPengiriman', 'voucherShopee', 'voucherToko',
+            'biayaLayanan', 'totalNota', 'status', 'fotoUrl', 'fakturUrl',
+            'dipesanOleh', 'dibayarOleh', 'diterimaOleh', 'distokOleh', 'catatan'],
   itemBelanja: ['idBelanja', 'baris', 'nama', 'qty', 'hargaSatuan', 'subtotalItem',
-                'alokasiOngkir', 'alokasiDiskon', 'hargaRiilTotal', 'hargaRiilUnit',
+                'alokasiBiaya', 'hargaRiilTotal', 'hargaRiilUnit',
                 'klasifikasi', 'kodeMaster', 'kelompok'],
   antrianAset: ['idAset', 'timestamp', 'idBelanja', 'nama', 'tanggalTerima', 'hargaTotal',
                 'sumber', 'kategori', 'statusCatat'],
+  klasifikasiKw: ['klasifikasi', 'keyword'],
   rekap:  ['periode', 'kelompok', 'totalPembelian', 'totalHpp', 'dibuat'],
-  users:  ['nama', 'pin', 'kelompok', 'aktif'],
+  users:  ['nama', 'pin', 'kelompok', 'peran', 'aktif'],
 };
 
-// Staf contoh — GANTI nama & PIN ini di sheet "users" sesuai staf asli KLINIKTA.
+// Staf contoh — GANTI nama, PIN & peran ini di sheet "users" sesuai staf asli KLINIKTA.
+// Peran: admin | bendahara | penerima | logistik | staf.
 var USERS_SEED = [
-  ['Staf Gigi', '1111', 'BHP Gigi', true],
-  ['Staf Umum', '2222', 'BHP Umum', true],
-  ['Staf Obat', '3333', 'Obat', true],
-  ['Admin',     '0000', 'BHP Gigi', true],
+  ['Admin',      '0000', 'BHP Gigi', 'admin',     true],
+  ['Bendahara',  '2025', 'BHP Umum', 'bendahara', true],
+  ['Penerima',   '2026', 'BHP Umum', 'penerima',  true],
+  ['Logistik',   '2027', 'BHP Gigi', 'logistik',  true],
+  ['Staf Gigi',  '1111', 'BHP Gigi', 'staf',      true],
+];
+
+// Kata kunci tebakan klasifikasi awal (dikelola admin di sheet klasifikasi_kw).
+var KW_SEED = [
+  ['Aset', 'scaler'], ['Aset', 'light cure'], ['Aset', 'curing'], ['Aset', 'dental unit'],
+  ['Aset', 'kompresor'], ['Aset', 'compressor'], ['Aset', 'autoclave'], ['Aset', 'sterilisator'],
+  ['Aset', 'apex locator'], ['Aset', 'micromotor'], ['Aset', 'contra angle'], ['Aset', 'handpiece'],
+  ['Aset', 'rontgen'], ['Aset', 'x-ray'], ['Aset', 'endomotor'], ['Aset', 'nebulizer'], ['Aset', 'kursi'],
+  ['Alkes', 'pinset'], ['Alkes', 'sonde'], ['Alkes', 'ekskavator'], ['Alkes', 'kaca mulut'],
+  ['Alkes', 'tang'], ['Alkes', 'forceps'], ['Alkes', 'bur set'], ['Alkes', 'elevator'], ['Alkes', 'kuret'],
+  ['Alkes', 'gunting'], ['Alkes', 'needle holder'], ['Alkes', 'retractor'], ['Alkes', 'spatula'],
+  ['Obat', 'amoxicillin'], ['Obat', 'paracetamol'], ['Obat', 'ibuprofen'], ['Obat', 'metronidazole'],
+  ['Obat', 'cefadroxil'], ['Obat', 'dexamethasone'], ['Obat', 'ranitidine'], ['Obat', 'injeksi'],
+  ['Obat', 'tablet'], ['Obat', 'kapsul'], ['Obat', 'ampul'], ['Obat', 'vial'], ['Obat', 'obat'],
 ];
 
 // ----------------------------------------------------------------------------
@@ -86,6 +112,7 @@ function setup() {
 
   seedMaster_(ss);
   seedUsers_(ss);
+  seedKeywords_(ss);
   ensureDriveFolder_();
 
   // Hapus sheet default "Sheet1" jika masih kosong/ada.
@@ -121,6 +148,12 @@ function seedUsers_(ss) {
   sh.getRange(2, 1, USERS_SEED.length, HEADERS.users.length).setValues(USERS_SEED);
 }
 
+function seedKeywords_(ss) {
+  var sh = ss.getSheetByName(SHEETS.klasifikasiKw);
+  if (sh.getLastRow() > 1) return;
+  sh.getRange(2, 1, KW_SEED.length, HEADERS.klasifikasiKw.length).setValues(KW_SEED);
+}
+
 function ensureDriveFolder_() {
   var props = PropertiesService.getScriptProperties();
   var id = props.getProperty(PROP_FOLDER_ID);
@@ -149,6 +182,8 @@ function doGet(e) {
     if (action === 'getRekap') {
       return json_({ ok: true, data: getRekap_(e.parameter.periode || null) });
     }
+    if (action === 'getSettings') return json_({ ok: true, data: getSettings_() });
+    if (action === 'getMasterAll') return json_({ ok: true, data: getMasterAll_() });
     return json_({ ok: false, error: 'Action GET tidak dikenal: ' + action });
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message || err) });
@@ -185,7 +220,14 @@ function doPost(e) {
       case 'saveOpname':          result = saveLines_(SHEETS.opname, body); break;
       case 'saveBelanja':         result = saveBelanja_(body); break;
       case 'updateBelanjaStatus': result = updateBelanjaStatus_(body); break;
+      case 'finalizeBelanja':     result = finalizeBelanja_(body); break;
+      case 'uploadFile':          result = uploadFile_(body); break;
       case 'updateAntrianAset':   result = updateAntrianAset_(body); break;
+      // Admin only:
+      case 'saveMaster':          result = adminSaveMaster_(body); break;
+      case 'saveUser':            result = adminSaveUser_(body); break;
+      case 'saveKeyword':         result = adminSaveKeyword_(body); break;
+      case 'deleteKeyword':       result = adminDeleteKeyword_(body); break;
       default: return json_({ ok: false, error: 'Action POST tidak dikenal: ' + action });
     }
     return json_({ ok: true, data: result });
@@ -202,7 +244,7 @@ function doPost(e) {
 function listUsers_() {
   return readSheet_(SHEETS.users)
     .filter(function (u) { return u.nama && u.aktif !== false && String(u.aktif) !== 'false'; })
-    .map(function (u) { return { nama: String(u.nama), kelompok: u.kelompok || 'BHP Gigi' }; });
+    .map(function (u) { return { nama: String(u.nama), kelompok: u.kelompok || 'BHP Gigi', peran: u.peran || 'staf' }; });
 }
 
 function login_(nama, pin) {
@@ -214,7 +256,23 @@ function login_(nama, pin) {
   });
   if (!found) throw new Error('Staf tidak ditemukan / tidak aktif.');
   if (String(found.pin) !== String(pin)) throw new Error('PIN salah.');
-  return { nama: String(found.nama), kelompok: found.kelompok || 'BHP Gigi' };
+  return { nama: String(found.nama), kelompok: found.kelompok || 'BHP Gigi', peran: found.peran || 'staf' };
+}
+
+// Peran staf (tepercaya, dibaca dari sheet users — bukan dari klien) untuk enforcement.
+function peranOf_(nama) {
+  var p = 'staf';
+  readSheet_(SHEETS.users).forEach(function (u) { if (String(u.nama) === String(nama)) p = u.peran || 'staf'; });
+  return p;
+}
+// Lempar error bila peran user tidak termasuk yang diizinkan (admin selalu boleh).
+function requireRole_(nama, allowed) {
+  var p = peranOf_(nama);
+  if (p === 'admin') return p;
+  if (allowed.indexOf(p) < 0) {
+    throw new Error('Akses ditolak: butuh peran ' + allowed.join('/') + ' atau admin. Peran Anda: ' + p + '.');
+  }
+  return p;
 }
 
 // ----------------------------------------------------------------------------
@@ -345,8 +403,8 @@ function saveLines_(sheetName, body) {
 // BELANJA & TERIMA
 // ----------------------------------------------------------------------------
 
-// Baris "barang masuk" dari item_belanja pada nota berstatus "Diterima" yang
-// sudah dipetakan ke master (kodeMaster). Format kompatibel sumBy_/sumSince_.
+// Baris "barang masuk" dari item_belanja pada nota berstatus "Masuk Stok" yang
+// sudah dipetakan ke master (kodeMaster). Stok bertambah hanya setelah finalisasi logistik.
 function receivedMasuk_() {
   var belanja = readSheet_(SHEETS.belanja);
   var info = {};
@@ -356,17 +414,17 @@ function receivedMasuk_() {
   var out = [];
   readSheet_(SHEETS.itemBelanja).forEach(function (it) {
     var parent = info[it.idBelanja];
-    if (!parent || parent.status !== 'Diterima' || !it.kodeMaster) return;
+    if (!parent || parent.status !== 'Masuk Stok' || !it.kodeMaster) return;
     out.push({ kode: it.kodeMaster, jumlah: num_(it.qty), tanggal: fmtDate_(parent.tanggalTerima) });
   });
   return out;
 }
 
-// Harga beli rata-rata tertimbang per kode (Aturan 6), dari item diterima.
+// Harga beli rata-rata tertimbang per kode (Aturan 6), dari item yang sudah masuk stok.
 function avgCostByKode_() {
   var belanja = readSheet_(SHEETS.belanja);
   var recv = {};
-  belanja.forEach(function (b) { if (b.idBelanja && String(b.status) === 'Diterima') recv[b.idBelanja] = true; });
+  belanja.forEach(function (b) { if (b.idBelanja && String(b.status) === 'Masuk Stok') recv[b.idBelanja] = true; });
   var qty = {}, val = {};
   readSheet_(SHEETS.itemBelanja).forEach(function (it) {
     if (!recv[it.idBelanja] || !it.kodeMaster) return;
@@ -378,7 +436,10 @@ function avgCostByKode_() {
   return avg;
 }
 
-// Simpan satu nota + item-itemnya. Alokasi ongkir & diskon proporsional ke nilai item.
+// Simpan satu nota + itemnya. Status awal SELALU "Dipesan". Item hanya nama/qty/harga;
+// klasifikasi & pemetaan master diisi nanti saat finalisasi (logistik).
+// Biaya tambahan (pengiriman, diskon pengiriman, voucher Shopee/Toko, biaya layanan)
+// digabung jadi netBiaya lalu dialokasikan proporsional ke nilai tiap item (Aturan 6).
 function saveBelanja_(body) {
   var nota = body.nota || {};
   var items = body.items || [];
@@ -389,21 +450,24 @@ function saveBelanja_(body) {
   var shI = ss.getSheetByName(SHEETS.itemBelanja);
   if (!shB || !shI) throw new Error('Sheet belanja belum ada. Jalankan setup() lagi.');
 
-  var masterByKode = indexBy_(readSheet_(SHEETS.master), 'kode');
-  var ongkir = num_(nota.ongkir), diskon = num_(nota.diskon);
+  var pengiriman = num_(nota.pengiriman), diskonPengiriman = num_(nota.diskonPengiriman);
+  var voucherShopee = num_(nota.voucherShopee), voucherToko = num_(nota.voucherToko);
+  var biayaLayanan = num_(nota.biayaLayanan);
+
   var sumSub = 0;
   items.forEach(function (it) { sumSub += num_(it.qty) * num_(it.hargaSatuan); });
   if (sumSub <= 0) throw new Error('Subtotal item harus lebih dari 0.');
 
-  var status = nota.status || 'Dipesan';
+  // Penambah (pengiriman, biaya layanan) − pengurang (diskon pengiriman, voucher).
+  var netBiaya = pengiriman + biayaLayanan - diskonPengiriman - voucherShopee - voucherToko;
+  var totalNota = sumSub + netBiaya;
   var tglPesan = nota.tanggalPesan || todayStr_();
-  var tglTerima = (status === 'Diterima') ? (nota.tanggalTerima || todayStr_()) : (nota.tanggalTerima || '');
   var id = 'BLJ' + (new Date()).getTime();
   var ts = new Date();
-  var totalNota = sumSub + ongkir - diskon;
 
-  shB.appendRow([id, ts, tglPesan, tglTerima, nota.sumber || '', nota.supplier || '',
-                 sumSub, ongkir, diskon, totalNota, status, body.user || '', nota.catatan || '']);
+  shB.appendRow([id, ts, tglPesan, '', nota.sumber || '', nota.supplier || '', nota.noVA || '',
+                 sumSub, pengiriman, diskonPengiriman, voucherShopee, voucherToko, biayaLayanan,
+                 totalNota, 'Dipesan', '', '', body.user || '', '', '', '', nota.catatan || '']);
 
   var rows = [], baris = 0;
   items.forEach(function (it) {
@@ -411,19 +475,16 @@ function saveBelanja_(body) {
     var q = num_(it.qty), h = num_(it.hargaSatuan);
     var sub = q * h;
     var prop = sumSub > 0 ? sub / sumSub : 0;
-    var aOngkir = ongkir * prop, aDiskon = diskon * prop;
-    var riilTotal = sub + aOngkir - aDiskon;
+    var aBiaya = netBiaya * prop;
+    var riilTotal = sub + aBiaya;
     var riilUnit = q > 0 ? riilTotal / q : 0;
-    var klas = it.klasifikasi || 'BHP';
-    var kode = (KLAS_STOK[klas] && it.kodeMaster) ? it.kodeMaster : '';
-    var kelompok = (kode && masterByKode[kode]) ? masterByKode[kode].kelompok : (it.kelompok || '');
-    rows.push([id, baris, it.nama || '', q, h, sub, aOngkir, aDiskon, riilTotal, riilUnit, klas, kode, kelompok]);
+    // klasifikasi/kodeMaster/kelompok dikosongkan — diisi saat finalisasi.
+    rows.push([id, baris, it.nama || '', q, h, sub, aBiaya, riilTotal, riilUnit, '', '', '']);
   });
   shI.getRange(shI.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 
-  if (status === 'Diterima') queueAssets_(id);
   SpreadsheetApp.flush();
-  return { idBelanja: id, totalNota: totalNota, items: rows.length, status: status };
+  return { idBelanja: id, totalNota: totalNota, items: rows.length, status: 'Dipesan' };
 }
 
 // Masukkan item ber-klasifikasi Aset (status Diterima) ke antrian_aset, hindari duplikat.
@@ -452,22 +513,139 @@ function queueAssets_(idBelanja) {
 }
 function baris3_(n) { return ('00' + n).slice(-3); }
 
+// Transisi status berbasis peran:
+//   Dipesan  -> Dibayar  : bendahara (catat noVA + dibayarOleh)
+//   Dibayar  -> Diterima : penerima  (foto barang + tanggalTerima + diterimaOleh)
+// Transisi -> "Masuk Stok" lewat finalizeBelanja_ (logistik), bukan di sini.
 function updateBelanjaStatus_(body) {
   var id = body.idBelanja;
   if (!id) throw new Error('idBelanja wajib.');
   var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.belanja);
   var rowIdx = findRow_(sh, 'idBelanja', id);
   if (rowIdx < 0) throw new Error('Nota tidak ditemukan: ' + id);
-  var statusCol = HEADERS.belanja.indexOf('status') + 1;
-  var terimaCol = HEADERS.belanja.indexOf('tanggalTerima') + 1;
-  if (body.status) sh.getRange(rowIdx, statusCol).setValue(body.status);
-  if (body.status === 'Diterima') {
-    sh.getRange(rowIdx, terimaCol).setValue(body.tanggalTerima || todayStr_());
-    SpreadsheetApp.flush();
-    queueAssets_(id);
+  var to = body.status;
+
+  if (to === 'Dibayar') {
+    requireRole_(body.user, ['bendahara']);
+    setCell_(sh, rowIdx, 'status', 'Dibayar');
+    setCell_(sh, rowIdx, 'dibayarOleh', body.user || '');
+    if (body.noVA) setCell_(sh, rowIdx, 'noVA', body.noVA);
+  } else if (to === 'Diterima') {
+    requireRole_(body.user, ['penerima']);
+    setCell_(sh, rowIdx, 'status', 'Diterima');
+    setCell_(sh, rowIdx, 'diterimaOleh', body.user || '');
+    setCell_(sh, rowIdx, 'tanggalTerima', body.tanggalTerima || todayStr_());
+    if (body.fotoUrl) setCell_(sh, rowIdx, 'fotoUrl', body.fotoUrl);
+  } else {
+    throw new Error('Transisi status tidak didukung di sini: ' + to);
   }
   SpreadsheetApp.flush();
-  return { idBelanja: id, status: body.status };
+  return { idBelanja: id, status: to };
+}
+
+// Finalisasi oleh logistik: petakan tiap item ke master (atau tambah item master baru),
+// upload faktur, lalu set status "Masuk Stok" (stok bertambah). Item Aset -> antrian.
+function finalizeBelanja_(body) {
+  var id = body.idBelanja;
+  if (!id) throw new Error('idBelanja wajib.');
+  requireRole_(body.user, ['logistik']);
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var shB = ss.getSheetByName(SHEETS.belanja);
+  var rowIdx = findRow_(shB, 'idBelanja', id);
+  if (rowIdx < 0) throw new Error('Nota tidak ditemukan: ' + id);
+
+  var shI = ss.getSheetByName(SHEETS.itemBelanja);
+  var data = shI.getDataRange().getValues();
+  var head = data[0];
+  var cId = head.indexOf('idBelanja'), cBaris = head.indexOf('baris');
+  var cKode = head.indexOf('kodeMaster'), cKel = head.indexOf('kelompok'), cKlas = head.indexOf('klasifikasi');
+
+  (body.mappings || []).forEach(function (mp) {
+    var target = mp.target;  // salah satu KELOMPOK_STOK, atau 'Aset'
+    var kode = '', kelompok = '', klas = '';
+    if (target === 'Aset') {
+      klas = 'Aset';
+    } else {
+      if (KELOMPOK_STOK.indexOf(target) < 0) throw new Error('Tujuan tidak valid: ' + target);
+      kelompok = target;
+      klas = (target === 'Obat') ? 'Obat' : (target === 'Alkes') ? 'Alkes' : 'BHP';
+      if (mp.kodeMaster) kode = mp.kodeMaster;
+      else if (mp.newItem && mp.newItem.nama) kode = createMasterItem_(target, mp.newItem);
+      else throw new Error('Baris ' + mp.baris + ' belum dipetakan ke item master.');
+    }
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][cId]) === String(id) && String(data[i][cBaris]) === String(mp.baris)) {
+        if (cKode >= 0) shI.getRange(i + 1, cKode + 1).setValue(kode);
+        if (cKel >= 0) shI.getRange(i + 1, cKel + 1).setValue(kelompok);
+        if (cKlas >= 0) shI.getRange(i + 1, cKlas + 1).setValue(klas);
+        break;
+      }
+    }
+  });
+
+  setCell_(shB, rowIdx, 'status', 'Masuk Stok');
+  setCell_(shB, rowIdx, 'distokOleh', body.user || '');
+  if (body.fakturUrl) setCell_(shB, rowIdx, 'fakturUrl', body.fakturUrl);
+  var nota = indexBy_(readSheet_(SHEETS.belanja), 'idBelanja')[id];
+  if (nota && !fmtDate_(nota.tanggalTerima)) setCell_(shB, rowIdx, 'tanggalTerima', todayStr_());
+
+  SpreadsheetApp.flush();
+  queueAssets_(id);  // item yang baru ditandai Aset masuk antrian
+  return { idBelanja: id, status: 'Masuk Stok' };
+}
+
+// Buat item master baru saat finalisasi (kode otomatis per kelompok). Kembalikan kode.
+function createMasterItem_(kelompok, d) {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.master);
+  var prefix = KODE_PREFIX[kelompok] || 'ITM-';
+  var max = 0;
+  readSheet_(SHEETS.master).forEach(function (m) {
+    var k = String(m.kode || '');
+    if (k.indexOf(prefix) === 0) {
+      var n = parseInt(k.slice(prefix.length).replace(/\D/g, ''), 10);
+      if (!isNaN(n) && n > max) max = n;
+    }
+  });
+  var kode = prefix + ('000' + (max + 1)).slice(-3);
+  sh.appendRow([kode, d.nama, kelompok, kelompok, d.subKategori || 'Lainnya', d.satuan || '',
+                d.kemasan || '', num_(d.hargaAcuan), defaultKategori_(kelompok), 'Praktis', '', true]);
+  return kode;
+}
+
+function defaultKategori_(kelompok) {
+  if (kelompok === 'Obat') return 'Obat-obatan';
+  if (kelompok === 'BHP Umum') return 'Penjualan BHP';
+  if (kelompok === 'Alkes') return 'Beban Alkes';
+  return 'Beban Penggunaan Produk Internal'; // BHP Gigi
+}
+
+// Upload file (foto barang / faktur) base64 -> Drive, simpan URL di nota.
+function uploadFile_(body) {
+  var id = body.idBelanja, kind = body.kind;
+  if (!body.dataBase64) throw new Error('File kosong.');
+  if (kind === 'faktur') requireRole_(body.user, ['logistik']);
+  else requireRole_(body.user, ['penerima']);  // foto barang
+
+  var parent = DriveApp.getFolderById(ensureDriveFolder_());
+  var sub = getOrCreateSubfolder_(parent, kind === 'faktur' ? 'Faktur' : 'Foto Barang');
+  var blob = Utilities.newBlob(Utilities.base64Decode(body.dataBase64),
+                               body.mimeType || 'application/octet-stream',
+                               body.filename || (kind + '-' + id));
+  var file = sub.createFile(blob);
+  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  var url = file.getUrl();
+  if (id) {
+    var shB = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.belanja);
+    var rowIdx = findRow_(shB, 'idBelanja', id);
+    if (rowIdx > 0) setCell_(shB, rowIdx, kind === 'faktur' ? 'fakturUrl' : 'fotoUrl', url);
+  }
+  return { url: url, kind: kind };
+}
+
+function getOrCreateSubfolder_(parent, name) {
+  var it = parent.getFoldersByName(name);
+  return it.hasNext() ? it.next() : parent.createFolder(name);
 }
 
 function updateAntrianAset_(body) {
@@ -496,8 +674,13 @@ function getBelanja_(periode) {
   var out = readSheet_(SHEETS.belanja).filter(function (b) { return b.idBelanja; }).map(function (b) {
     return {
       idBelanja: b.idBelanja, tanggalPesan: fmtDate_(b.tanggalPesan), tanggalTerima: fmtDate_(b.tanggalTerima),
-      sumber: b.sumber, supplier: b.supplier, subtotal: num_(b.subtotal), ongkir: num_(b.ongkir),
-      diskon: num_(b.diskon), totalNota: num_(b.totalNota), status: b.status, user: b.user, catatan: b.catatan,
+      sumber: b.sumber, supplier: b.supplier, noVA: b.noVA,
+      subtotal: num_(b.subtotal), pengiriman: num_(b.pengiriman), diskonPengiriman: num_(b.diskonPengiriman),
+      voucherShopee: num_(b.voucherShopee), voucherToko: num_(b.voucherToko), biayaLayanan: num_(b.biayaLayanan),
+      totalNota: num_(b.totalNota), status: b.status,
+      fotoUrl: b.fotoUrl, fakturUrl: b.fakturUrl,
+      dipesanOleh: b.dipesanOleh, dibayarOleh: b.dibayarOleh, diterimaOleh: b.diterimaOleh, distokOleh: b.distokOleh,
+      catatan: b.catatan,
       items: (byId[b.idBelanja] || []).sort(function (a, c) { return a.baris - c.baris; }),
     };
   });
@@ -513,15 +696,15 @@ function getRekap_(periode) {
 
   var recvInPeriod = {};
   belanja.forEach(function (b) {
-    if (String(b.status) === 'Diterima' && fmtDate_(b.tanggalTerima).slice(0, 7) === per) recvInPeriod[b.idBelanja] = b;
+    if (String(b.status) === 'Masuk Stok' && fmtDate_(b.tanggalTerima).slice(0, 7) === per) recvInPeriod[b.idBelanja] = b;
   });
 
   var totalPersediaan = 0, totalBebanAlkes = 0;
   readSheet_(SHEETS.itemBelanja).forEach(function (it) {
     if (!recvInPeriod[it.idBelanja]) return;
     var v = num_(it.hargaRiilTotal);
-    if (KLAS_STOK[it.klasifikasi]) totalPersediaan += v;
-    else if (String(it.klasifikasi) === 'Alkes') totalBebanAlkes += v;
+    if (KELOMPOK_PERSEDIAAN[it.kelompok]) totalPersediaan += v;       // BHP Gigi/Umum/Obat
+    else if (String(it.kelompok) === 'Alkes') totalBebanAlkes += v;   // Alkes -> beban
   });
 
   var aset = readSheet_(SHEETS.antrianAset)
@@ -556,8 +739,124 @@ function getRekap_(periode) {
 }
 
 // ----------------------------------------------------------------------------
+// ADMIN — kelola master, staf, kata kunci klasifikasi (peran admin)
+// ----------------------------------------------------------------------------
+function requireAdmin_(nama) {
+  if (peranOf_(nama) !== 'admin') throw new Error('Hanya admin yang boleh melakukan ini.');
+}
+
+// Pengaturan untuk frontend: kata kunci klasifikasi + daftar kelompok & status.
+function getSettings_() {
+  return {
+    keywords: readSheet_(SHEETS.klasifikasiKw)
+      .filter(function (r) { return r.keyword; })
+      .map(function (r) { return { klasifikasi: r.klasifikasi, keyword: String(r.keyword) }; }),
+    kelompokStok: KELOMPOK_STOK,
+    statusFlow: STATUS_FLOW,
+  };
+}
+
+// Semua master termasuk yang nonaktif (untuk panel admin).
+function getMasterAll_() {
+  return readSheet_(SHEETS.master).filter(function (m) { return m.kode; }).map(function (m) {
+    return {
+      kode: m.kode, nama: m.nama, kelompok: m.kelompok, subKategori: m.subKategori,
+      satuan: m.satuan, kemasan: m.kemasan, hargaAcuan: num_(m.hargaAcuan),
+      metode: m.metode || 'Praktis', titikReorder: num_(m.titikReorder),
+      aktif: !(m.aktif === false || String(m.aktif) === 'false'),
+    };
+  });
+}
+
+function adminSaveMaster_(body) {
+  requireAdmin_(body.user);
+  var it = body.item || {};
+  if (!it.nama || !it.kelompok) throw new Error('Nama & kelompok wajib.');
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.master);
+
+  if (it.kode) {
+    var rowIdx = findRow_(sh, 'kode', it.kode);
+    if (rowIdx < 0) throw new Error('Kode tidak ditemukan: ' + it.kode);
+    setCell_(sh, rowIdx, 'nama', it.nama);
+    setCell_(sh, rowIdx, 'kelompok', it.kelompok);
+    setCell_(sh, rowIdx, 'kategoriProduk', it.kelompok);
+    setCell_(sh, rowIdx, 'subKategori', it.subKategori || '');
+    setCell_(sh, rowIdx, 'satuan', it.satuan || '');
+    setCell_(sh, rowIdx, 'kemasan', it.kemasan || '');
+    setCell_(sh, rowIdx, 'hargaAcuan', num_(it.hargaAcuan));
+    setCell_(sh, rowIdx, 'metode', it.metode || 'Praktis');
+    setCell_(sh, rowIdx, 'titikReorder', (it.titikReorder === '' || it.titikReorder == null) ? '' : num_(it.titikReorder));
+    setCell_(sh, rowIdx, 'aktif', it.aktif !== false);
+    SpreadsheetApp.flush();
+    return { kode: it.kode, updated: true };
+  }
+  var kode = createMasterItem_(it.kelompok, it);
+  var r2 = findRow_(sh, 'kode', kode);
+  if (it.metode) setCell_(sh, r2, 'metode', it.metode);
+  if (it.titikReorder != null && it.titikReorder !== '') setCell_(sh, r2, 'titikReorder', num_(it.titikReorder));
+  SpreadsheetApp.flush();
+  return { kode: kode, created: true };
+}
+
+function adminSaveUser_(body) {
+  requireAdmin_(body.user);
+  var s = body.staf || {};
+  if (!s.nama) throw new Error('Nama staf wajib.');
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.users);
+  var key = s.originalNama || s.nama;
+  var rowIdx = findRow_(sh, 'nama', key);
+  if (rowIdx < 0) {
+    sh.appendRow([s.nama, String(s.pin || ''), s.kelompok || 'BHP Gigi', s.peran || 'staf', s.aktif !== false]);
+    SpreadsheetApp.flush();
+    return { nama: s.nama, created: true };
+  }
+  setCell_(sh, rowIdx, 'nama', s.nama);
+  if (s.pin != null && s.pin !== '') setCell_(sh, rowIdx, 'pin', String(s.pin));
+  setCell_(sh, rowIdx, 'kelompok', s.kelompok || 'BHP Gigi');
+  setCell_(sh, rowIdx, 'peran', s.peran || 'staf');
+  setCell_(sh, rowIdx, 'aktif', s.aktif !== false);
+  SpreadsheetApp.flush();
+  return { nama: s.nama, updated: true };
+}
+
+function adminSaveKeyword_(body) {
+  requireAdmin_(body.user);
+  var klas = body.klasifikasi, kw = (body.keyword || '').toString().trim().toLowerCase();
+  if (!klas || !kw) throw new Error('Klasifikasi & keyword wajib.');
+  var dup = readSheet_(SHEETS.klasifikasiKw).some(function (r) {
+    return String(r.klasifikasi) === String(klas) && String(r.keyword).toLowerCase() === kw;
+  });
+  if (dup) return { klasifikasi: klas, keyword: kw, duplikat: true };
+  SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.klasifikasiKw).appendRow([klas, kw]);
+  SpreadsheetApp.flush();
+  return { klasifikasi: klas, keyword: kw, created: true };
+}
+
+function adminDeleteKeyword_(body) {
+  requireAdmin_(body.user);
+  var klas = body.klasifikasi, kw = (body.keyword || '').toString().trim().toLowerCase();
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.klasifikasiKw);
+  var data = sh.getDataRange().getValues();
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][0]) === String(klas) && String(data[i][1]).toLowerCase() === kw) {
+      sh.deleteRow(i + 1);
+      SpreadsheetApp.flush();
+      return { deleted: true };
+    }
+  }
+  return { deleted: false };
+}
+
+// ----------------------------------------------------------------------------
 // Util
 // ----------------------------------------------------------------------------
+// Set sel berdasarkan nama kolom (header baris 1) pada baris rowIdx.
+function setCell_(sh, rowIdx, colName, val) {
+  var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  var c = head.indexOf(colName);
+  if (c >= 0) sh.getRange(rowIdx, c + 1).setValue(val);
+}
+
 // Cari nomor baris (1-based, termasuk header) berdasarkan nilai di kolom bernama colName.
 function findRow_(sh, colName, value) {
   var data = sh.getDataRange().getValues();

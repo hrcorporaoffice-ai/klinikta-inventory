@@ -46,6 +46,29 @@ export function guessKlasifikasi(nama) {
   return 'BHP'
 }
 
+// Tebak dari kata kunci yang dikelola admin (list {klasifikasi, keyword}).
+// Prioritas: Aset > Alkes > Obat (cocok dengan tiga jalur). Fallback ke guess statis.
+export function guessFromKeywords(nama, keywords) {
+  if (!nama) return 'BHP'
+  if (!keywords || !keywords.length) return guessKlasifikasi(nama)
+  const n = nama.toLowerCase()
+  const has = (klas) => keywords.some((k) => k.klasifikasi === klas && n.includes(String(k.keyword).toLowerCase()))
+  if (has('Aset')) return 'Aset'
+  if (has('Alkes')) return 'Alkes'
+  if (has('Obat')) return 'Obat'
+  return 'BHP'
+}
+
+// Tebakan kelompok target saat finalisasi (logistik): Aset/Alkes -> kelompok itu,
+// Obat -> Obat, sisanya default BHP Gigi (mayoritas item gigi).
+export function guessTarget(nama, keywords) {
+  const klas = guessFromKeywords(nama, keywords)
+  if (klas === 'Aset') return 'Aset'
+  if (klas === 'Alkes') return 'Alkes'
+  if (klas === 'Obat') return 'Obat'
+  return 'BHP Gigi'
+}
+
 export const PANDUAN_KLAS = [
   ['BHP / Obat', 'Habis dipakai (komposit, kapas, obat, jarum). → menambah stok'],
   ['Alkes', 'Dipakai ulang, awet tapi nilai kecil (bur set, pinset). → beban langsung'],

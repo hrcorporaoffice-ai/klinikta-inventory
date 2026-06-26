@@ -38,18 +38,27 @@ Catat semua ID inventory di tabel paling bawah dokumen ini, terpisah dari absens
      `rekap_bulanan` terisi, dan folder Drive `INVENTORY_KLINIKTA_Bukti` dibuat.
    - Cek tab **Execution log** muncul `Setup selesai`.
 
-### Atur Staf & PIN (penting untuk log "siapa input")
-Setelah `setup()`, buka sheet **`users`**. Sudah terisi contoh
-(`Staf Gigi/1111`, `Staf Umum/2222`, `Staf Obat/3333`, `Admin/0000`).
-**Ganti** kolom `nama` & `pin` sesuai staf asli KLINIKTA:
-| nama | pin | kelompok | aktif |
-|---|---|---|---|
-| (nama staf) | (4 digit) | BHP Gigi / BHP Umum / Obat | TRUE |
+### Atur Staf, PIN & Peran (lebih mudah lewat tab Admin)
+Setelah `setup()`, sheet **`users`** terisi contoh dengan kolom
+`nama | pin | kelompok | peran | aktif`. Peran menentukan langkah alur belanja:
 
-Saat staf login di app, nama mereka otomatis ikut tercatat di setiap baris
-`transaksi_pakai` / `transaksi_masuk` / `opname` (kolom `user` + `timestamp` jam),
-sehingga di spreadsheet kelihatan **siapa input apa, kapan**. Untuk menonaktifkan
-staf: set `aktif` = FALSE (jangan dihapus, agar log lama tetap utuh).
+| peran | boleh apa |
+|---|---|
+| `admin` | semua + tab Admin (kelola master, staf, kata kunci, ekspor) |
+| `bendahara` | tandai nota **Dibayar** |
+| `penerima` | foto barang + tandai **Diterima** |
+| `logistik` | upload faktur + petakan ke stok (**Masuk Stok**) |
+| `staf` | input pemakaian/opname, buat belanja (Dipesan) |
+
+Cara termudah mengelola staf: **login sebagai Admin** (`Admin / 0000`) → tab **Admin → Staf & PIN**.
+Login staf mencatat nama + jam di tiap baris log (siapa input apa, kapan); tiap langkah
+belanja juga mencatat siapa (dipesan/dibayar/diterima/distok). Nonaktifkan staf: `aktif`=FALSE.
+
+> 🔄 **Jika sebelumnya sudah pernah `setup()` versi lama** (sheet `users` masih 4 kolom,
+> belum ada `peran`): sebelum Run `setup()` versi baru, **hapus dulu tab `users`,
+> `transaksi_belanja`, dan `item_belanja`** (semua masih data percobaan). `setup()`
+> akan membuatnya ulang dengan kolom yang benar + isi contoh staf. Sheet `master_item`
+> & `transaksi_pakai` TIDAK perlu dihapus (kolomnya tidak berubah).
 
 ## Langkah 3 — Deploy GAS sebagai Web App
 1. Tombol **Deploy → New deployment**.

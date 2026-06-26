@@ -73,9 +73,30 @@ export async function getRekap(periode) {
   return out.data
 }
 
+async function get(action, params = {}) {
+  ensureUrl()
+  const url = new URL(GAS_URL)
+  url.searchParams.set('action', action)
+  Object.entries(params).forEach(([k, v]) => v != null && url.searchParams.set(k, v))
+  const res = await fetch(url.toString(), { method: 'GET', redirect: 'follow' })
+  const out = await res.json()
+  if (!out.ok) throw new Error(out.error || `Gagal: ${action}`)
+  return out.data
+}
+
+export const getSettings = () => get('getSettings')
+export const getMasterAll = () => get('getMasterAll')
+
 export const login = (payload) => post('login', payload)
 export const savePakai = (payload) => post('savePakai', payload)
 export const saveOpname = (payload) => post('saveOpname', payload)
 export const saveBelanja = (payload) => post('saveBelanja', payload)
 export const updateBelanjaStatus = (payload) => post('updateBelanjaStatus', payload)
+export const finalizeBelanja = (payload) => post('finalizeBelanja', payload)
+export const uploadFile = (payload) => post('uploadFile', payload)
 export const updateAntrianAset = (payload) => post('updateAntrianAset', payload)
+// Admin
+export const saveMaster = (payload) => post('saveMaster', payload)
+export const saveUser = (payload) => post('saveUser', payload)
+export const saveKeyword = (payload) => post('saveKeyword', payload)
+export const deleteKeyword = (payload) => post('deleteKeyword', payload)

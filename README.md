@@ -7,10 +7,14 @@ Buku gudang detail yang nantinya menyuplai angka ringkasan ke Akoontan (LAPKEU).
 simpan ke Google Sheets. **4 mode:**
 1. **Pemakaian Hari Ini** — keluar gudang = HPP
 2. **Stok Opname** — cek fisik berkala
-3. **Belanja & Terima** — catat belanja (alokasi ongkir/diskon proporsional), klasifikasi
-   BHP/Alkes/Aset, 3 jalur saat diterima (BHP/Obat→stok, Alkes→beban, Aset→antrian),
-   pemetaan ke item master
+3. **Belanja & Terima** — catat belanja (komponen biaya checkout Shopee dialokasikan
+   proporsional), alur berbasis peran **Dipesan → Dibayar → Diterima → Masuk Stok**
+   (foto barang & faktur diunggah ke Drive; logistik memetakan tiap item ke persediaan
+   spesifik BHP Gigi/Umum/Obat/Alkes — bisa tambah item master baru — atau Aset→antrian)
 4. **Rekap → LAPKEU** — angka siap salin ke Akoontan (Level 1, manual)
+5. **Admin** (peran admin) — kelola item master, staf & PIN & peran, kata kunci klasifikasi, ekspor CSV
+
+**Peran:** admin · bendahara · penerima · logistik · staf (diatur di tab Admin / sheet `users`).
 
 Integrasi otomatis ke Akoontan belum disentuh (lihat [SPEK_TEKNIS](SPEK_TEKNIS_Inventory_KLINIKTA.md) §7
 & [SPEK_TAMBAHAN](SPEK_TAMBAHAN_Integrasi_Belanja.md)).

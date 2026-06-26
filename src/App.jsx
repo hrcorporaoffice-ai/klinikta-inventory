@@ -3,6 +3,7 @@ import { MASTER_ITEMS, KELOMPOK } from './data/masterItems.js'
 import * as api from './api.js'
 import Belanja from './components/Belanja.jsx'
 import Rekap from './components/Rekap.jsx'
+import Admin from './components/Admin.jsx'
 
 const MODES = [
   { id: 'pakai',   label: 'Pemakaian Hari Ini', sub: 'Isi yang terpakai hari ini', chip: 'b' },
@@ -58,7 +59,6 @@ function InventoryApp({ user, onLogout }) {
 
   const [inputs, setInputs] = useState({})    // kode -> value (mode-dependent)
   const [query, setQuery] = useState('')
-  const [filterSub, setFilterSub] = useState('Semua')
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)    // { type, msg }
 
@@ -82,26 +82,17 @@ function InventoryApp({ user, onLogout }) {
   useEffect(() => { load() }, [load])
 
   // Ganti kelompok/mode → bersihkan input agar tidak tercampur.
-  useEffect(() => { setInputs({}); setFilterSub('Semua') }, [group])
+  useEffect(() => { setInputs({}) }, [group])
   useEffect(() => { setInputs({}) }, [mode])
 
   const items = state?.items || []
   const counts = state?.counts || MASTER_COUNTS
 
-  const subKategoris = useMemo(() => {
-    const seen = []
-    items.forEach((i) => { if (i.subKategori && !seen.includes(i.subKategori)) seen.push(i.subKategori) })
-    return seen
-  }, [items])
-
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return items.filter((i) => {
-      if (filterSub !== 'Semua' && i.subKategori !== filterSub) return false
-      if (q && !(`${i.nama} ${i.kode} ${i.subKategori}`.toLowerCase().includes(q))) return false
-      return true
-    })
-  }, [items, query, filterSub])
+    if (!q) return items
+    return items.filter((i) => `${i.nama} ${i.kode} ${i.subKategori}`.toLowerCase().includes(q))
+  }, [items, query])
 
   // Kelompokkan per sub-kategori (urutan kemunculan).
   const grouped = useMemo(() => {
@@ -162,7 +153,10 @@ function InventoryApp({ user, onLogout }) {
     }
   }
 
-  const modeMeta = MODES.find((m) => m.id === mode)
+  const modes = user.peran === 'admin'
+    ? [...MODES, { id: 'admin', label: 'Admin', sub: 'Kelola data & staf', chip: 'r' }]
+    : MODES
+  const modeMeta = modes.find((m) => m.id === mode) || MODES[0]
   const isGrid = GRID_MODES.includes(mode)
 
   return (
@@ -201,7 +195,7 @@ function InventoryApp({ user, onLogout }) {
 
         {/* Mode tabs */}
         <div className="tabs">
-          {MODES.map((m) => (
+          {modes.map((m) => (
             <button
               key={m.id}
               className={'tab' + (m.id === mode ? ' active' : '')}
@@ -215,26 +209,15 @@ function InventoryApp({ user, onLogout }) {
 
         {isGrid ? (
           <>
-            {/* Toolbar */}
+            {/* Toolbar — cukup kotak pencarian */}
             <div className="toolbar">
               <div className="search">
                 🔍<input
-                  placeholder="Cari item… (mis. komposit, paper point)"
+                  placeholder="Cari item… (mis. komposit, paper point, endo)"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
               </div>
-              <button
-                className={'filter' + (filterSub === 'Semua' ? ' on' : '')}
-                onClick={() => setFilterSub('Semua')}
-              >Semua</button>
-              {subKategoris.map((s) => (
-                <button
-                  key={s}
-                  className={'filter' + (filterSub === s ? ' on' : '')}
-                  onClick={() => setFilterSub(s)}
-                >{s}</button>
-              ))}
             </div>
 
             {/* Grid */}
@@ -269,6 +252,8 @@ function InventoryApp({ user, onLogout }) {
           </>
         ) : mode === 'belanja' ? (
           <Belanja user={user} today={today} onToast={showToast} onChanged={load} />
+        ) : mode === 'admin' ? (
+          <Admin user={user} onToast={showToast} />
         ) : (
           <Rekap today={today} onToast={showToast} />
         )}
@@ -303,7 +288,7 @@ function Login({ onLogin }) {
 
   useEffect(() => {
     api.getUsers()
-      .then((list) => { setUsers(list); if (list[0]) setNama(list[0].nama) })
+      .then((list) => setUsers(list))
       .catch((e) => setErr(e.message))
   }, [])
 
@@ -319,34 +304,37 @@ function Login({ onLogin }) {
     }
   }
 
+  const admins = (users || []).filter((u) => u.peran === 'admin')
+  const staf = (users || []).filter((u) => u.peran !== 'admin')
+
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
-        <div className="login-brand">
-          <span className="dot">📦</span>
-          <div>KLINIKTA Inventory<small>Stok BHP &amp; Obat</small></div>
-        </div>
-        <p className="login-hint">Pilih nama Anda lalu masukkan PIN untuk mulai mencatat.</p>
+        <div className="login-logo">K9+</div>
+        <div className="login-title">KLINIKTA</div>
+        <div className="login-tagline">Inventory · Stok BHP &amp; Obat</div>
 
         {users === null && !err ? (
           <div className="state"><span className="spin" />Memuat daftar staf…</div>
         ) : (
           <>
-            <label className="lbl">Nama staf</label>
-            <select className="login-input" value={nama} onChange={(e) => setNama(e.target.value)}>
-              {(users || []).map((u) => (
-                <option key={u.nama} value={u.nama}>{u.nama} — {u.kelompok}</option>
-              ))}
+            <select className="login-input login-select" value={nama} onChange={(e) => setNama(e.target.value)} autoFocus>
+              <option value="">— Pilih nama kamu —</option>
+              {staf.map((u) => <option key={u.nama} value={u.nama}>{u.nama}</option>)}
+              {admins.length > 0 && (
+                <optgroup label="Admin / Manager">
+                  {admins.map((u) => <option key={u.nama} value={u.nama}>👤 {u.nama}</option>)}
+                </optgroup>
+              )}
             </select>
 
-            <label className="lbl">PIN</label>
             <input
               className="login-input" type="password" inputMode="numeric"
-              placeholder="••••" value={pin} autoFocus
+              placeholder="PIN" value={pin}
               onChange={(e) => setPin(e.target.value)}
             />
 
-            <button className="btn" type="submit" disabled={busy || !nama || !pin} style={{ width: '100%', marginTop: 6 }}>
+            <button className="btn" type="submit" disabled={busy || !nama || !pin} style={{ width: '100%', marginTop: 10 }}>
               {busy ? 'Memeriksa…' : 'Masuk'}
             </button>
           </>
@@ -354,7 +342,7 @@ function Login({ onLogin }) {
 
         {err && <div className="login-err">⚠️ {err}</div>}
       </form>
-      <p className="note">Daftar staf & PIN diatur di sheet <b>users</b>.</p>
+      <p className="note">Daftar staf, PIN &amp; peran diatur di tab Admin (atau sheet <b>users</b>).</p>
     </div>
   )
 }
