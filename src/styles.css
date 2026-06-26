@@ -22,15 +22,21 @@ header{background:var(--navy);color:#fff;padding:14px 16px;border-radius:0 0 14p
 .logout{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:8px;padding:6px 10px;font-size:12.5px;cursor:pointer}
 .logout:hover{background:rgba(255,255,255,.12)}
 
-/* Login — gaya kartu dropdown */
-.login-wrap{max-width:400px;margin:0 auto;padding:56px 16px 24px;text-align:center}
-.login-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:30px 24px 26px;text-align:center;box-shadow:0 12px 40px rgba(41,81,127,.12)}
-.login-logo{width:60px;height:60px;border-radius:15px;background:var(--navy);color:#fff;display:grid;place-items:center;font-size:22px;font-weight:800;letter-spacing:.5px;margin:0 auto 12px;box-shadow:0 6px 16px rgba(41,81,127,.25)}
-.login-title{font-size:24px;font-weight:800;color:var(--navy);letter-spacing:.5px}
-.login-tagline{font-size:13px;color:var(--muted);margin:2px 0 22px}
-.login-input{width:100%;padding:13px 14px;border:1.5px solid var(--line);border-radius:11px;font-size:15px;outline:none;background:#fff;margin-bottom:10px;color:var(--ink)}
+/* Login */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px 16px;background:var(--bg)}
+.login-card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:36px 28px 30px;text-align:center;box-shadow:0 16px 52px rgba(41,81,127,.13);width:100%;max-width:360px}
+.login-logo{width:72px;height:72px;border-radius:20px;background:linear-gradient(140deg,var(--navy) 0%,var(--blue) 100%);display:grid;place-items:center;margin:0 auto 18px;box-shadow:0 8px 24px rgba(41,81,127,.28)}
+.login-title{font-size:28px;font-weight:800;color:var(--navy);letter-spacing:.5px;line-height:1}
+.login-sub{font-size:14px;font-weight:600;color:var(--blue);letter-spacing:1.5px;text-transform:uppercase;margin:4px 0 26px;opacity:.75}
+.login-input{width:100%;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px;font-size:15px;outline:none;background:#fff;margin-bottom:10px;color:var(--ink)}
 .login-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,110,182,.12)}
 .login-select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236b7280' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:34px}
+.pin-field{position:relative;margin-bottom:10px}
+.pin-dots{display:flex;justify-content:center;gap:14px;margin-bottom:10px}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--line);background:transparent;transition:.15s}
+.pin-dot.on{background:var(--navy);border-color:var(--navy)}
+.pin-hidden{width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;font-size:22px;letter-spacing:8px;text-align:center;outline:none;background:#fff;color:var(--navy)}
+.pin-hidden:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,110,182,.12)}
 .login-err{margin-top:12px;background:#fdeaea;color:var(--low);padding:9px 12px;border-radius:9px;font-size:13px;text-align:left}
 
 /* Group switcher */

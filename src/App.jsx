@@ -280,6 +280,8 @@ function InventoryApp({ user, onLogout }) {
 }
 
 // ---------------- Login (pemilih staf + PIN ringan) ----------------
+const splitP = (p) => String(p || 'staf').split(',').map((r) => r.trim()).filter(Boolean)
+
 function Login({ onLogin }) {
   const [users, setUsers] = useState(null)
   const [nama, setNama] = useState('')
@@ -293,27 +295,38 @@ function Login({ onLogin }) {
       .catch((e) => setErr(e.message))
   }, [])
 
-  async function submit(e) {
-    e.preventDefault()
-    if (!nama || !pin || busy) return
+  async function doLogin(loginNama, loginPin) {
+    if (!loginNama || !loginPin || busy) return
     setBusy(true); setErr('')
     try {
-      const u = await api.login({ nama, pin })
+      const u = await api.login({ nama: loginNama, pin: loginPin })
       onLogin(u)
     } catch (e2) {
       setErr(e2.message); setBusy(false)
     }
   }
 
-  const admins = (users || []).filter((u) => u.peran === 'admin')
-  const staf = (users || []).filter((u) => u.peran !== 'admin')
+  function handlePinChange(e) {
+    const val = e.target.value.replace(/\D/g, '').slice(0, 4)
+    setPin(val)
+    if (val.length === 4 && nama && !busy) doLogin(nama, val)
+  }
+
+  const admins = (users || []).filter((u) => splitP(u.peran).includes('admin'))
+  const staf   = (users || []).filter((u) => !splitP(u.peran).includes('admin'))
 
   return (
     <div className="login-wrap">
-      <form className="login-card" onSubmit={submit}>
-        <div className="login-logo">K9+</div>
+      <form className="login-card" onSubmit={(e) => { e.preventDefault(); doLogin(nama, pin) }}>
+        <div className="login-logo">
+          <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
+            <path d="M17 3L31 11v12L17 31 3 23V11L17 3z" fill="rgba(255,255,255,.18)" stroke="white" strokeWidth="2" strokeLinejoin="round"/>
+            <path d="M3 11l14 8 14-8M17 19v12" stroke="white" strokeWidth="1.6" strokeLinejoin="round"/>
+            <path d="M14 6.5l3 1.5 3-1.5" stroke="white" strokeWidth="1.2" opacity=".6"/>
+          </svg>
+        </div>
         <div className="login-title">KLINIKTA</div>
-        <div className="login-tagline">Inventory · Stok BHP &amp; Obat</div>
+        <div className="login-sub">Inventory</div>
 
         {users === null && !err ? (
           <div className="state"><span className="spin" />Memuat daftar staf…</div>
@@ -329,13 +342,18 @@ function Login({ onLogin }) {
               )}
             </select>
 
-            <input
-              className="login-input" type="password" inputMode="numeric"
-              placeholder="PIN" value={pin}
-              onChange={(e) => setPin(e.target.value)}
-            />
+            <div className="pin-field">
+              <div className="pin-dots" aria-hidden="true">
+                {[0,1,2,3].map((i) => <span key={i} className={'pin-dot' + (pin.length > i ? ' on' : '')} />)}
+              </div>
+              <input
+                className="pin-hidden" type="password" inputMode="numeric"
+                autoComplete="off" value={pin} onChange={handlePinChange}
+                placeholder="••••"
+              />
+            </div>
 
-            <button className="btn" type="submit" disabled={busy || !nama || !pin} style={{ width: '100%', marginTop: 10 }}>
+            <button className="btn" type="submit" disabled={busy || !nama || pin.length < 1} style={{ width: '100%', marginTop: 12 }}>
               {busy ? 'Memeriksa…' : 'Masuk'}
             </button>
           </>
@@ -343,7 +361,6 @@ function Login({ onLogin }) {
 
         {err && <div className="login-err">⚠️ {err}</div>}
       </form>
-      <p className="note">Daftar staf, PIN &amp; peran diatur di tab Admin (atau sheet <b>users</b>).</p>
     </div>
   )
 }
