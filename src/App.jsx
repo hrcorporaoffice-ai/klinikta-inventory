@@ -67,11 +67,35 @@ function InventoryApp({ user, onLogout }) {
     setTimeout(() => setToast(null), 3200)
   }, [])
 
-  const load = useCallback(async () => {
+  // Cache stale-while-revalidate: tampilkan data lama seketika, refresh di background.
+  // Mencegah loading spinner setiap kali ganti kelompok / reload halaman.
+  const CACHE_TTL = 5 * 60 * 1000 // 5 menit
+  const cacheKey = `inv_st_${group}_${today}`
+
+  const load = useCallback(async (force = false) => {
+    // Coba ambil dari cache dulu
+    if (!force) {
+      try {
+        const raw = localStorage.getItem(cacheKey)
+        if (raw) {
+          const { data, ts } = JSON.parse(raw)
+          if (Date.now() - ts < CACHE_TTL) {
+            setState(data); setLoading(false)
+            // Refresh diam-diam di background
+            api.getState(group, today).then((fresh) => {
+              setState(fresh)
+              localStorage.setItem(cacheKey, JSON.stringify({ data: fresh, ts: Date.now() }))
+            }).catch(() => {})
+            return
+          }
+        }
+      } catch {}
+    }
     setLoading(true); setError('')
     try {
       const data = await api.getState(group, today)
       setState(data)
+      localStorage.setItem(cacheKey, JSON.stringify({ data, ts: Date.now() }))
     } catch (e) {
       setError(e.message)
     } finally {
@@ -145,7 +169,8 @@ function InventoryApp({ user, onLogout }) {
       }
       showToast('ok', `Tersimpan: ${res.tersimpan} item.`)
       setInputs({})
-      await load()
+      localStorage.removeItem(cacheKey) // paksa reload fresh setelah simpan
+      await load(true)
     } catch (e) {
       showToast('err', e.message)
     } finally {
@@ -291,8 +316,19 @@ function Login({ onLogin }) {
   const pinRef = useRef(null)
 
   useEffect(() => {
+    const USERS_TTL = 15 * 60 * 1000
+    try {
+      const raw = localStorage.getItem('inv_users')
+      if (raw) {
+        const { data, ts } = JSON.parse(raw)
+        if (Date.now() - ts < USERS_TTL) { setUsers(data); return }
+      }
+    } catch {}
     api.getUsers()
-      .then((list) => setUsers(list))
+      .then((list) => {
+        setUsers(list)
+        localStorage.setItem('inv_users', JSON.stringify({ data: list, ts: Date.now() }))
+      })
       .catch((e) => setErr(e.message))
   }, [])
 

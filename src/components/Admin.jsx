@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import * as api from '../api.js'
 
 const KELOMPOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes']
@@ -46,6 +46,15 @@ function MasterAdmin({ user, onToast }) {
 
   const filtered = (items || []).filter((m) => !q || `${m.nama} ${m.kode} ${m.kelompok} ${m.subKategori}`.toLowerCase().includes(q.toLowerCase()))
 
+  // Saran sub-kategori: ambil nilai unik dari items yang kelompoknya sama.
+  const subKatOptions = useMemo(() => {
+    if (!items) return []
+    return [...new Set(
+      items.filter((m) => m.kelompok === (edit?.kelompok || '') && m.subKategori)
+           .map((m) => String(m.subKategori).trim())
+    )].sort()
+  }, [items, edit?.kelompok])
+
   async function save() {
     if (!edit.nama.trim() || !edit.kelompok) { onToast('err', 'Nama & kelompok wajib.'); return }
     setBusy(true)
@@ -63,7 +72,17 @@ function MasterAdmin({ user, onToast }) {
         <div className="bform">
           <label>Nama<input value={edit.nama} onChange={(e) => setEdit({ ...edit, nama: e.target.value })} /></label>
           <label>Kelompok<select value={edit.kelompok} onChange={(e) => setEdit({ ...edit, kelompok: e.target.value })}>{KELOMPOK.map((k) => <option key={k}>{k}</option>)}</select></label>
-          <label>Sub-kategori<input value={edit.subKategori} onChange={(e) => setEdit({ ...edit, subKategori: e.target.value })} /></label>
+          <label>Sub-kategori
+            <input
+              list="subkat-opts"
+              value={edit.subKategori}
+              onChange={(e) => setEdit({ ...edit, subKategori: e.target.value })}
+              placeholder="Pilih saran atau ketik baru…"
+            />
+            <datalist id="subkat-opts">
+              {subKatOptions.map((s) => <option key={s} value={s} />)}
+            </datalist>
+          </label>
           <label>Satuan<input value={edit.satuan} onChange={(e) => setEdit({ ...edit, satuan: e.target.value })} /></label>
           <label>Isi/Kemasan<input value={edit.kemasan} onChange={(e) => setEdit({ ...edit, kemasan: e.target.value })} /></label>
           <label>Harga acuan (Rp)<input type="number" min="0" value={edit.hargaAcuan} onChange={(e) => setEdit({ ...edit, hargaAcuan: e.target.value })} /></label>
