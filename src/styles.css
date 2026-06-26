@@ -24,20 +24,27 @@ header{background:var(--navy);color:#fff;padding:14px 16px;border-radius:0 0 14p
 
 /* Login */
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px 16px;background:var(--bg)}
-.login-card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:36px 28px 30px;text-align:center;box-shadow:0 16px 52px rgba(41,81,127,.13);width:100%;max-width:360px}
-.login-logo{width:72px;height:72px;border-radius:20px;background:linear-gradient(140deg,var(--navy) 0%,var(--blue) 100%);display:grid;place-items:center;margin:0 auto 18px;box-shadow:0 8px 24px rgba(41,81,127,.28)}
-.login-title{font-size:28px;font-weight:800;color:var(--navy);letter-spacing:.5px;line-height:1}
-.login-sub{font-size:14px;font-weight:600;color:var(--blue);letter-spacing:1.5px;text-transform:uppercase;margin:4px 0 26px;opacity:.75}
-.login-input{width:100%;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px;font-size:15px;outline:none;background:#fff;margin-bottom:10px;color:var(--ink)}
+.login-card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:32px 28px 28px;box-shadow:0 16px 52px rgba(41,81,127,.13);width:100%;max-width:360px}
+/* Brand row: logo icon kiri + teks kanan — sama persis seperti absensi */
+.login-brand-row{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.login-logo{width:58px;height:58px;border-radius:16px;background:var(--navy);flex-shrink:0;display:grid;place-items:center;box-shadow:0 6px 18px rgba(41,81,127,.28)}
+.login-brand-text{text-align:left}
+.login-title{font-size:24px;font-weight:800;color:var(--navy);letter-spacing:.3px;line-height:1.1}
+.login-tagline{font-size:11px;color:var(--muted);letter-spacing:.5px;margin-top:1px}
+.login-module{font-size:13px;color:var(--muted);text-align:center;margin-bottom:20px}
+.login-input{width:100%;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px;font-size:15px;outline:none;background:#fff;margin-bottom:12px;color:var(--ink)}
 .login-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,110,182,.12)}
 .login-select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236b7280' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:34px}
-.pin-field{position:relative;margin-bottom:10px}
-.pin-dots{display:flex;justify-content:center;gap:14px;margin-bottom:10px}
-.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--line);background:transparent;transition:.15s}
-.pin-dot.on{background:var(--navy);border-color:var(--navy)}
-.pin-hidden{width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;font-size:22px;letter-spacing:8px;text-align:center;outline:none;background:#fff;color:var(--navy)}
-.pin-hidden:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,110,182,.12)}
-.login-err{margin-top:12px;background:#fdeaea;color:var(--low);padding:9px 12px;border-radius:9px;font-size:13px;text-align:left}
+/* PIN: 4 kotak terpisah (OTP style) persis seperti absensi */
+.pin-wrap{margin-bottom:14px}
+.pin-label{font-size:12px;color:var(--muted);text-align:center;margin-bottom:10px}
+.pin-boxes{position:relative;display:flex;gap:10px;justify-content:center;cursor:text}
+.pin-box{width:58px;height:58px;border-radius:14px;border:1.5px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--navy);font-weight:700;transition:.15s;user-select:none}
+.pin-box.active{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,110,182,.12)}
+.pin-box.filled{border-color:var(--navy);background:var(--soft)}
+.pin-overlay-input{position:absolute;opacity:0;width:1px;height:1px;top:0;left:0;pointer-events:none}
+.login-btn{width:100%;margin-top:4px}
+.login-err{margin-top:12px;color:var(--low);font-size:13px;text-align:center}
 
 /* Group switcher */
 .groups{display:flex;gap:7px;margin:16px 0 4px;align-items:center;flex-wrap:wrap}

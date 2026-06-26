@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { MASTER_ITEMS, KELOMPOK } from './data/masterItems.js'
 import * as api from './api.js'
 import Belanja from './components/Belanja.jsx'
@@ -288,12 +288,17 @@ function Login({ onLogin }) {
   const [pin, setPin] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const pinRef = useRef(null)
 
   useEffect(() => {
     api.getUsers()
       .then((list) => setUsers(list))
       .catch((e) => setErr(e.message))
   }, [])
+
+  useEffect(() => {
+    if (nama) { setPin(''); setErr(''); setTimeout(() => pinRef.current?.focus(), 50) }
+  }, [nama])
 
   async function doLogin(loginNama, loginPin) {
     if (!loginNama || !loginPin || busy) return
@@ -302,13 +307,14 @@ function Login({ onLogin }) {
       const u = await api.login({ nama: loginNama, pin: loginPin })
       onLogin(u)
     } catch (e2) {
-      setErr(e2.message); setBusy(false)
+      setErr(e2.message); setBusy(false); setPin('')
+      setTimeout(() => pinRef.current?.focus(), 50)
     }
   }
 
   function handlePinChange(e) {
     const val = e.target.value.replace(/\D/g, '').slice(0, 4)
-    setPin(val)
+    setPin(val); setErr('')
     if (val.length === 4 && nama && !busy) doLogin(nama, val)
   }
 
@@ -318,21 +324,30 @@ function Login({ onLogin }) {
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={(e) => { e.preventDefault(); doLogin(nama, pin) }}>
-        <div className="login-logo">
-          <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
-            <path d="M17 3L31 11v12L17 31 3 23V11L17 3z" fill="rgba(255,255,255,.18)" stroke="white" strokeWidth="2" strokeLinejoin="round"/>
-            <path d="M3 11l14 8 14-8M17 19v12" stroke="white" strokeWidth="1.6" strokeLinejoin="round"/>
-            <path d="M14 6.5l3 1.5 3-1.5" stroke="white" strokeWidth="1.2" opacity=".6"/>
-          </svg>
+
+        {/* Brand row: logo + nama klinik (horizontal, persis seperti absensi) */}
+        <div className="login-brand-row">
+          <div className="login-logo">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+              <path d="M16 3L29 10v12L16 29 3 22V10L16 3z" fill="rgba(255,255,255,.18)" stroke="white" strokeWidth="1.8" strokeLinejoin="round"/>
+              <path d="M3 10l13 7.5L29 10M16 17.5V29" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
+              <line x1="16" y1="11" x2="16" y2="20" stroke="white" strokeWidth="1.4"/>
+              <line x1="12" y1="15.5" x2="20" y2="15.5" stroke="white" strokeWidth="1.4"/>
+            </svg>
+          </div>
+          <div className="login-brand-text">
+            <div className="login-title">KLINIKTA</div>
+            <div className="login-tagline">KLINIK KITA SEMUA</div>
+          </div>
         </div>
-        <div className="login-title">KLINIKTA</div>
-        <div className="login-sub">Inventory</div>
+
+        <div className="login-module">Inventory · Stok BHP &amp; Obat</div>
 
         {users === null && !err ? (
           <div className="state"><span className="spin" />Memuat daftar staf…</div>
         ) : (
           <>
-            <select className="login-input login-select" value={nama} onChange={(e) => setNama(e.target.value)} autoFocus>
+            <select className="login-input login-select" value={nama} onChange={(e) => setNama(e.target.value)} autoFocus={!nama}>
               <option value="">— Pilih nama kamu —</option>
               {staf.map((u) => <option key={u.nama} value={u.nama}>{u.nama}</option>)}
               {admins.length > 0 && (
@@ -342,24 +357,33 @@ function Login({ onLogin }) {
               )}
             </select>
 
-            <div className="pin-field">
-              <div className="pin-dots" aria-hidden="true">
-                {[0,1,2,3].map((i) => <span key={i} className={'pin-dot' + (pin.length > i ? ' on' : '')} />)}
+            {nama && (
+              <div className="pin-wrap">
+                <div className="pin-label">Masukan PIN 4 digit</div>
+                <div className="pin-boxes" onClick={() => pinRef.current?.focus()}>
+                  {[0,1,2,3].map((i) => (
+                    <div key={i} className={'pin-box' + (pin.length === i && !busy ? ' active' : '') + (pin.length > i ? ' filled' : '')}>
+                      {pin.length > i ? '•' : ''}
+                    </div>
+                  ))}
+                  <input
+                    ref={pinRef}
+                    className="pin-overlay-input"
+                    type="password" inputMode="numeric"
+                    autoComplete="off" maxLength={4}
+                    value={pin} onChange={handlePinChange}
+                  />
+                </div>
               </div>
-              <input
-                className="pin-hidden" type="password" inputMode="numeric"
-                autoComplete="off" value={pin} onChange={handlePinChange}
-                placeholder="••••"
-              />
-            </div>
+            )}
 
-            <button className="btn" type="submit" disabled={busy || !nama || pin.length < 1} style={{ width: '100%', marginTop: 12 }}>
-              {busy ? 'Memeriksa…' : 'Masuk'}
+            <button className="btn login-btn" type="submit" disabled={busy || !nama || pin.length < 1}>
+              {busy ? 'Memeriksa…' : 'Masuk →'}
             </button>
           </>
         )}
 
-        {err && <div className="login-err">⚠️ {err}</div>}
+        {err && <div className="login-err">{err}</div>}
       </form>
     </div>
   )
