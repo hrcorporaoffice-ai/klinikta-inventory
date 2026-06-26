@@ -153,7 +153,8 @@ function InventoryApp({ user, onLogout }) {
     }
   }
 
-  const modes = user.peran === 'admin'
+  const isAdmin = String(user.peran || '').split(',').map((r) => r.trim()).includes('admin')
+  const modes = isAdmin
     ? [...MODES, { id: 'admin', label: 'Admin', sub: 'Kelola data & staf', chip: 'r' }]
     : MODES
   const modeMeta = modes.find((m) => m.id === mode) || MODES[0]

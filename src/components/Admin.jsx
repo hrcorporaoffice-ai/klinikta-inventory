@@ -3,6 +3,8 @@ import * as api from '../api.js'
 
 const KELOMPOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes']
 const PERAN = ['staf', 'bendahara', 'penerima', 'logistik', 'admin']
+const splitPeran = (p) => String(p || 'staf').split(',').map((r) => r.trim()).filter(Boolean)
+const joinPeran = (arr) => arr.length ? arr.join(',') : 'staf'
 const SECTIONS = [
   ['master', 'Item Master'],
   ['staf', 'Staf & PIN'],
@@ -127,7 +129,22 @@ function StafAdmin({ user, onToast }) {
           <label>Nama<input value={edit.nama} onChange={(e) => setEdit({ ...edit, nama: e.target.value })} /></label>
           <label>PIN{edit.originalNama ? ' (kosongkan = tetap)' : ''}<input value={edit.pin} onChange={(e) => setEdit({ ...edit, pin: e.target.value })} /></label>
           <label>Kelompok<select value={edit.kelompok} onChange={(e) => setEdit({ ...edit, kelompok: e.target.value })}>{KELOMPOK.map((k) => <option key={k}>{k}</option>)}</select></label>
-          <label>Peran<select value={edit.peran} onChange={(e) => setEdit({ ...edit, peran: e.target.value })}>{PERAN.map((p) => <option key={p}>{p}</option>)}</select></label>
+          <label>Peran</label>
+          <div className="peran-checks">
+            {PERAN.map((p) => {
+              const cur = splitPeran(edit.peran)
+              const checked = cur.includes(p)
+              return (
+                <label key={p} className="peran-check">
+                  <input type="checkbox" checked={checked} onChange={(e) => {
+                    const next = e.target.checked ? [...cur, p] : cur.filter((x) => x !== p)
+                    setEdit({ ...edit, peran: joinPeran(next) })
+                  }} />
+                  {p}
+                </label>
+              )
+            })}
+          </div>
           <label>Aktif<select value={edit.aktif ? '1' : '0'} onChange={(e) => setEdit({ ...edit, aktif: e.target.value === '1' })}><option value="1">Aktif</option><option value="0">Nonaktif</option></select></label>
         </div>
         <div className="bsave">

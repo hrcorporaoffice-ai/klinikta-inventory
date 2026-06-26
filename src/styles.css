@@ -212,6 +212,9 @@ td.num{text-align:center}
 .kw-chip{display:inline-flex;align-items:center;gap:5px;background:var(--soft);border-radius:7px;padding:3px 6px 3px 9px;font-size:12px;margin:0 5px 5px 0}
 .kw-chip button{border:none;background:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0}
 .kw-chip button:hover{color:var(--red)}
+.peran-checks{display:flex;flex-wrap:wrap;gap:8px 14px;padding:2px 0 4px}
+.peran-check{display:flex;align-items:center;gap:6px;font-size:13.5px;cursor:pointer;user-select:none}
+.peran-check input{width:16px;height:16px;accent-color:var(--navy);cursor:pointer}
 
 /* ---------- Rekap ---------- */
 .periode-pick{font-size:12px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px}

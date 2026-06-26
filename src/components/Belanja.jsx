@@ -6,8 +6,9 @@ const rupiah = (n) => 'Rp ' + new Intl.NumberFormat('id-ID').format(Math.round(n
 const STATUS_BADGE = { Dipesan: 'warn', Dibayar: 'b', Diterima: 'b', 'Masuk Stok': 'ok' }
 const newRow = () => ({ id: Math.random().toString(36).slice(2), nama: '', qty: '', hargaSatuan: '' })
 
-// peran boleh menjalankan langkah tertentu? admin selalu boleh.
-const can = (user, role) => user.peran === 'admin' || user.peran === role
+// Satu akun bisa punya beberapa peran (comma-separated). Admin selalu boleh segalanya.
+const parsePeran = (p) => String(p || 'staf').split(',').map((r) => r.trim()).filter(Boolean)
+const can = (user, role) => { const r = parsePeran(user.peran); return r.includes('admin') || r.includes(role) }
 
 // Baca file jadi base64 (tanpa prefix data:).
 function fileToBase64(file) {

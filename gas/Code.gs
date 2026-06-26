@@ -260,19 +260,21 @@ function login_(nama, pin) {
 }
 
 // Peran staf (tepercaya, dibaca dari sheet users — bukan dari klien) untuk enforcement.
+// Mengembalikan ARRAY peran (satu akun bisa punya beberapa peran, mis. ['logistik','staf']).
 function peranOf_(nama) {
-  var p = 'staf';
-  readSheet_(SHEETS.users).forEach(function (u) { if (String(u.nama) === String(nama)) p = u.peran || 'staf'; });
-  return p;
+  var raw = 'staf';
+  readSheet_(SHEETS.users).forEach(function (u) { if (String(u.nama) === String(nama)) raw = u.peran || 'staf'; });
+  return String(raw).split(',').map(function(r) { return r.trim(); }).filter(Boolean);
 }
-// Lempar error bila peran user tidak termasuk yang diizinkan (admin selalu boleh).
+// Lempar error bila tidak ada satupun peran user yang termasuk yang diizinkan (admin selalu boleh).
 function requireRole_(nama, allowed) {
-  var p = peranOf_(nama);
-  if (p === 'admin') return p;
-  if (allowed.indexOf(p) < 0) {
-    throw new Error('Akses ditolak: butuh peran ' + allowed.join('/') + ' atau admin. Peran Anda: ' + p + '.');
+  var roles = peranOf_(nama);
+  if (roles.indexOf('admin') >= 0) return roles.join(',');
+  var ok = allowed.some(function(a) { return roles.indexOf(a) >= 0; });
+  if (!ok) {
+    throw new Error('Akses ditolak: butuh peran ' + allowed.join('/') + ' atau admin. Peran Anda: ' + roles.join(',') + '.');
   }
-  return p;
+  return roles.join(',');
 }
 
 // ----------------------------------------------------------------------------
@@ -742,7 +744,7 @@ function getRekap_(periode) {
 // ADMIN — kelola master, staf, kata kunci klasifikasi (peran admin)
 // ----------------------------------------------------------------------------
 function requireAdmin_(nama) {
-  if (peranOf_(nama) !== 'admin') throw new Error('Hanya admin yang boleh melakukan ini.');
+  if (peranOf_(nama).indexOf('admin') < 0) throw new Error('Hanya admin yang boleh melakukan ini.');
 }
 
 // Pengaturan untuk frontend: kata kunci klasifikasi + daftar kelompok & status.
