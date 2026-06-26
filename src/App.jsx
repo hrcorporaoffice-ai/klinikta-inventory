@@ -358,28 +358,29 @@ function Login({ onLogin }) {
             </select>
 
             {nama && (
-              <div className="pin-wrap">
-                <div className="pin-label">Masukan PIN 4 digit</div>
-                <div className="pin-boxes" onClick={() => pinRef.current?.focus()}>
-                  {[0,1,2,3].map((i) => (
-                    <div key={i} className={'pin-box' + (pin.length === i && !busy ? ' active' : '') + (pin.length > i ? ' filled' : '')}>
-                      {pin.length > i ? '•' : ''}
-                    </div>
-                  ))}
-                  <input
-                    ref={pinRef}
-                    className="pin-overlay-input"
-                    type="password" inputMode="numeric"
-                    autoComplete="off" maxLength={4}
-                    value={pin} onChange={handlePinChange}
-                  />
+              <>
+                <div className="pin-wrap">
+                  <div className="pin-label">Masukan PIN 4 digit</div>
+                  <div className="pin-boxes" onClick={() => pinRef.current?.focus()}>
+                    {[0,1,2,3].map((i) => (
+                      <div key={i} className={'pin-box' + (pin.length === i && !busy ? ' active' : '') + (pin.length > i ? ' filled' : '')}>
+                        {pin.length > i ? '•' : ''}
+                      </div>
+                    ))}
+                    <input
+                      ref={pinRef}
+                      className="pin-overlay-input"
+                      type="password" inputMode="numeric"
+                      autoComplete="off" maxLength={4}
+                      value={pin} onChange={handlePinChange}
+                    />
+                  </div>
                 </div>
-              </div>
+                <button className="btn login-btn" type="submit" disabled={busy || pin.length < 1}>
+                  {busy ? 'Memeriksa…' : 'Masuk →'}
+                </button>
+              </>
             )}
-
-            <button className="btn login-btn" type="submit" disabled={busy || !nama || pin.length < 1}>
-              {busy ? 'Memeriksa…' : 'Masuk →'}
-            </button>
           </>
         )}
 

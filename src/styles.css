@@ -26,7 +26,7 @@ header{background:var(--navy);color:#fff;padding:14px 16px;border-radius:0 0 14p
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px 16px;background:var(--bg)}
 .login-card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:32px 28px 28px;box-shadow:0 16px 52px rgba(41,81,127,.13);width:100%;max-width:360px}
 /* Brand row: logo icon kiri + teks kanan — sama persis seperti absensi */
-.login-brand-row{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.login-brand-row{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:14px}
 .login-logo{width:58px;height:58px;border-radius:16px;background:var(--navy);flex-shrink:0;display:grid;place-items:center;box-shadow:0 6px 18px rgba(41,81,127,.28)}
 .login-brand-text{text-align:left}
 .login-title{font-size:24px;font-weight:800;color:var(--navy);letter-spacing:.3px;line-height:1.1}
