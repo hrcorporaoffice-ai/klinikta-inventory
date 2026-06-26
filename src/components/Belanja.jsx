@@ -332,10 +332,18 @@ function Finalisasi({ n, user, masterList, keywords, onToast, onDone }) {
         </div>
       ))}
       <div className="fin-foot">
-        <label className="btn ghost sm filelabel">
-          {faktur ? `📄 ${faktur.name.slice(0, 18)}…` : '📄 Upload faktur'}
-          <input type="file" accept="image/*,application/pdf" hidden onChange={(e) => setFaktur(e.target.files[0])} />
-        </label>
+        <div className="faktur-pick">
+          <span className="muted sm">Faktur:</span>
+          <label className="btn ghost sm filelabel">
+            📷 Kamera
+            <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => setFaktur(e.target.files[0])} />
+          </label>
+          <label className="btn ghost sm filelabel">
+            🖼️ Galeri
+            <input type="file" accept="image/*,application/pdf" hidden onChange={(e) => setFaktur(e.target.files[0])} />
+          </label>
+          {faktur && <span className="muted sm">📄 {faktur.name.slice(0, 16)}…</span>}
+        </div>
         <button className="btn sm" disabled={busy} onClick={submit}>{busy ? 'Memproses…' : 'Masukkan ke Stok'}</button>
       </div>
     </div>

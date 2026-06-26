@@ -216,6 +216,21 @@ td.num{text-align:center}
 .admin-tab.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 .admin-body{padding:14px}
 .admin-form .bform{grid-template-columns:repeat(2,1fr);padding:0 0 12px}
+/* Multi-select dropdown peran */
+.multisel{position:relative;width:100%}
+.multisel-btn{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;font-size:14px;min-height:42px}
+.multisel-btn.open{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,110,182,.1)}
+.multisel-arrow{font-size:11px;color:var(--muted);margin-left:6px;flex-shrink:0}
+.multisel-list{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--line);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.1);z-index:30;overflow:hidden}
+.multisel-opt{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;font-size:14px;border-bottom:1px solid #f4f6f9;user-select:none}
+.multisel-opt:last-child{border-bottom:none}
+.multisel-opt:hover{background:var(--soft)}
+.multisel-opt.on{background:#f0f7fc;color:var(--blue)}
+.multisel-check{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--line);flex-shrink:0;display:grid;place-items:center}
+.multisel-check.on{background:var(--navy);border-color:var(--navy)}
+.multisel-check.on::after{content:'✓';color:#fff;font-size:11px;font-weight:700}
+/* Faktur: pilihan kamera atau galeri */
+.faktur-pick{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .admin-list{display:flex;flex-direction:column}
 .admin-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f4f6f9;font-size:14px}
 .admin-row.off{opacity:.5}

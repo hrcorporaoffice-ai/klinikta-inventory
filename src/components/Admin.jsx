@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import * as api from '../api.js'
 
 const KELOMPOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes']
@@ -119,6 +119,44 @@ function MasterAdmin({ user, onToast }) {
   )
 }
 
+// ---------------- Multi-select dropdown peran ----------------
+function MultiSelect({ value, options, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const selected = splitPeran(value)
+
+  useEffect(() => {
+    if (!open) return
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
+  const toggle = (p) => {
+    const next = selected.includes(p) ? selected.filter((x) => x !== p) : [...selected, p]
+    onChange(joinPeran(next))
+  }
+
+  return (
+    <div className="multisel" ref={ref}>
+      <div className={'multisel-btn' + (open ? ' open' : '')} onClick={() => setOpen((v) => !v)}>
+        <span className={selected.length ? '' : 'muted'}>{selected.length ? selected.join(', ') : '— pilih peran —'}</span>
+        <span className="multisel-arrow">{open ? '▴' : '▾'}</span>
+      </div>
+      {open && (
+        <div className="multisel-list">
+          {options.map((p) => (
+            <label key={p} className={'multisel-opt' + (selected.includes(p) ? ' on' : '')} onClick={() => toggle(p)}>
+              <span className={'multisel-check' + (selected.includes(p) ? ' on' : '')} />
+              {p}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---------------- Staf ----------------
 const emptyStaf = { nama: '', pin: '', peran: 'logistik', aktif: true }
 
@@ -147,25 +185,15 @@ function StafAdmin({ user, onToast }) {
         <div className="bform">
           <label>Nama<input value={edit.nama} onChange={(e) => setEdit({ ...edit, nama: e.target.value })} /></label>
           <label>PIN{edit.originalNama ? ' (kosongkan = tetap)' : ''}<input value={edit.pin} onChange={(e) => setEdit({ ...edit, pin: e.target.value })} /></label>
-          <div className="bform-full">
-            <div className="bform-label">Peran</div>
-            <div className="peran-checks">
-              {PERAN.map((p) => {
-                const cur = splitPeran(edit.peran)
-                const checked = cur.includes(p)
-                return (
-                  <label key={p} className="peran-check">
-                    <input type="checkbox" checked={checked} onChange={(e) => {
-                      const next = e.target.checked ? [...cur, p] : cur.filter((x) => x !== p)
-                      setEdit({ ...edit, peran: joinPeran(next) })
-                    }} />
-                    {p}
-                  </label>
-                )
-              })}
-            </div>
-          </div>
-          <label>Aktif<select value={edit.aktif ? '1' : '0'} onChange={(e) => setEdit({ ...edit, aktif: e.target.value === '1' })}><option value="1">Aktif</option><option value="0">Nonaktif</option></select></label>
+          <label>Peran
+            <MultiSelect value={edit.peran} options={PERAN} onChange={(v) => setEdit({ ...edit, peran: v })} />
+          </label>
+          <label>Status
+            <select value={edit.aktif ? '1' : '0'} onChange={(e) => setEdit({ ...edit, aktif: e.target.value === '1' })}>
+              <option value="1">Aktif</option>
+              <option value="0">Nonaktif</option>
+            </select>
+          </label>
         </div>
         <div className="bsave">
           <button className="btn ghost" onClick={() => setEdit(null)}>Batal</button>
