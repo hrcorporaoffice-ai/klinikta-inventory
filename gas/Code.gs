@@ -25,12 +25,17 @@
 // === Konfigurasi nama sheet (jangan diubah sembarangan) ===
 var SHEETS = {
   master: 'master_item',
-  masuk: 'transaksi_masuk',
   pakai: 'transaksi_pakai',
   opname: 'opname',
+  belanja: 'transaksi_belanja',     // satu baris per nota/pesanan
+  itemBelanja: 'item_belanja',      // detail item per nota (many-to-one)
+  antrianAset: 'antrian_aset',      // barang Aset yang belum dicatat ke Akoontan
   rekap: 'rekap_bulanan',
   users: 'users',
 };
+
+// Klasifikasi yang menambah stok (dipetakan ke master). Selain ini tidak menambah stok.
+var KLAS_STOK = { 'BHP': true, 'Obat': true };
 
 var DRIVE_FOLDER_NAME = 'INVENTORY_KLINIKTA_Bukti'; // folder bukti faktur/foto (Drive terpisah)
 var PROP_FOLDER_ID = 'INVENTORY_DRIVE_FOLDER_ID';
@@ -39,11 +44,16 @@ var PROP_FOLDER_ID = 'INVENTORY_DRIVE_FOLDER_ID';
 var HEADERS = {
   master: ['kode', 'nama', 'kelompok', 'kategoriProduk', 'subKategori', 'satuan',
            'kemasan', 'hargaAcuan', 'kategoriDefault', 'metode', 'titikReorder', 'aktif'],
-  masuk:  ['timestamp', 'tanggal', 'kelompok', 'kode', 'nama', 'jumlah', 'hargaUnit',
-           'total', 'supplier', 'noFaktur', 'buktiUrl', 'user', 'catatan'],
   pakai:  ['timestamp', 'tanggal', 'kelompok', 'kode', 'nama', 'jumlah', 'user', 'catatan'],
   opname: ['timestamp', 'tanggal', 'kelompok', 'kode', 'nama', 'stokSistem',
            'stokFisik', 'selisih', 'user', 'catatan'],
+  belanja: ['idBelanja', 'timestamp', 'tanggalPesan', 'tanggalTerima', 'sumber', 'supplier',
+            'subtotal', 'ongkir', 'diskon', 'totalNota', 'status', 'user', 'catatan'],
+  itemBelanja: ['idBelanja', 'baris', 'nama', 'qty', 'hargaSatuan', 'subtotalItem',
+                'alokasiOngkir', 'alokasiDiskon', 'hargaRiilTotal', 'hargaRiilUnit',
+                'klasifikasi', 'kodeMaster', 'kelompok'],
+  antrianAset: ['idAset', 'timestamp', 'idBelanja', 'nama', 'tanggalTerima', 'hargaTotal',
+                'sumber', 'kategori', 'statusCatat'],
   rekap:  ['periode', 'kelompok', 'totalPembelian', 'totalHpp', 'dibuat'],
   users:  ['nama', 'pin', 'kelompok', 'aktif'],
 };
@@ -133,6 +143,12 @@ function doGet(e) {
     if (action === 'getState') {
       return json_({ ok: true, data: getState_(e.parameter.kelompok || null, e.parameter.tanggal || null) });
     }
+    if (action === 'getBelanja') {
+      return json_({ ok: true, data: getBelanja_(e.parameter.periode || null) });
+    }
+    if (action === 'getRekap') {
+      return json_({ ok: true, data: getRekap_(e.parameter.periode || null) });
+    }
     return json_({ ok: false, error: 'Action GET tidak dikenal: ' + action });
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message || err) });
@@ -165,9 +181,11 @@ function doPost(e) {
     lock.waitLock(20000); // cegah tulisan bersamaan dari banyak HP
     var result;
     switch (action) {
-      case 'savePakai':  result = saveLines_(SHEETS.pakai, body); break;
-      case 'saveMasuk':  result = saveLines_(SHEETS.masuk, body); break;
-      case 'saveOpname': result = saveLines_(SHEETS.opname, body); break;
+      case 'savePakai':           result = saveLines_(SHEETS.pakai, body); break;
+      case 'saveOpname':          result = saveLines_(SHEETS.opname, body); break;
+      case 'saveBelanja':         result = saveBelanja_(body); break;
+      case 'updateBelanjaStatus': result = updateBelanjaStatus_(body); break;
+      case 'updateAntrianAset':   result = updateAntrianAset_(body); break;
       default: return json_({ ok: false, error: 'Action POST tidak dikenal: ' + action });
     }
     return json_({ ok: true, data: result });
@@ -207,7 +225,9 @@ function getState_(kelompok, tanggal) {
   var today = tanggal || todayStr_();
 
   var master = readSheet_(SHEETS.master);
-  var masuk = readSheet_(SHEETS.masuk);
+  // "Barang masuk" kini berasal dari item_belanja pada nota berstatus "Diterima"
+  // (menggantikan transaksi_masuk). Tiap baris: {kode, jumlah, tanggal}.
+  var masuk = receivedMasuk_();
   var pakai = readSheet_(SHEETS.pakai);
   var opname = readSheet_(SHEETS.opname);
 
@@ -303,12 +323,6 @@ function saveLines_(sheetName, body) {
       var qty = num_(ln.qty);
       if (qty <= 0) return;
       rows.push([ts, tanggal, kelompok, ln.kode, nama, qty, user, ln.catatan || '']);
-    } else if (sheetName === SHEETS.masuk) {
-      var jml = num_(ln.qty);
-      if (jml <= 0) return;
-      var harga = num_(ln.harga);
-      rows.push([ts, tanggal, kelompok, ln.kode, nama, jml, harga, jml * harga,
-                 ln.supplier || '', ln.noFaktur || '', ln.buktiUrl || '', user, ln.catatan || '']);
     } else if (sheetName === SHEETS.opname) {
       // stokFisik wajib; stokSistem & selisih dihitung server.
       if (ln.stokFisik === '' || ln.stokFisik == null) return;
@@ -328,8 +342,234 @@ function saveLines_(sheetName, body) {
 }
 
 // ----------------------------------------------------------------------------
+// BELANJA & TERIMA
+// ----------------------------------------------------------------------------
+
+// Baris "barang masuk" dari item_belanja pada nota berstatus "Diterima" yang
+// sudah dipetakan ke master (kodeMaster). Format kompatibel sumBy_/sumSince_.
+function receivedMasuk_() {
+  var belanja = readSheet_(SHEETS.belanja);
+  var info = {};
+  belanja.forEach(function (b) {
+    if (b.idBelanja) info[b.idBelanja] = { status: String(b.status), tanggalTerima: b.tanggalTerima };
+  });
+  var out = [];
+  readSheet_(SHEETS.itemBelanja).forEach(function (it) {
+    var parent = info[it.idBelanja];
+    if (!parent || parent.status !== 'Diterima' || !it.kodeMaster) return;
+    out.push({ kode: it.kodeMaster, jumlah: num_(it.qty), tanggal: fmtDate_(parent.tanggalTerima) });
+  });
+  return out;
+}
+
+// Harga beli rata-rata tertimbang per kode (Aturan 6), dari item diterima.
+function avgCostByKode_() {
+  var belanja = readSheet_(SHEETS.belanja);
+  var recv = {};
+  belanja.forEach(function (b) { if (b.idBelanja && String(b.status) === 'Diterima') recv[b.idBelanja] = true; });
+  var qty = {}, val = {};
+  readSheet_(SHEETS.itemBelanja).forEach(function (it) {
+    if (!recv[it.idBelanja] || !it.kodeMaster) return;
+    qty[it.kodeMaster] = (qty[it.kodeMaster] || 0) + num_(it.qty);
+    val[it.kodeMaster] = (val[it.kodeMaster] || 0) + num_(it.hargaRiilTotal);
+  });
+  var avg = {};
+  Object.keys(qty).forEach(function (k) { if (qty[k] > 0) avg[k] = val[k] / qty[k]; });
+  return avg;
+}
+
+// Simpan satu nota + item-itemnya. Alokasi ongkir & diskon proporsional ke nilai item.
+function saveBelanja_(body) {
+  var nota = body.nota || {};
+  var items = body.items || [];
+  if (!items.length) throw new Error('Tidak ada item belanja.');
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var shB = ss.getSheetByName(SHEETS.belanja);
+  var shI = ss.getSheetByName(SHEETS.itemBelanja);
+  if (!shB || !shI) throw new Error('Sheet belanja belum ada. Jalankan setup() lagi.');
+
+  var masterByKode = indexBy_(readSheet_(SHEETS.master), 'kode');
+  var ongkir = num_(nota.ongkir), diskon = num_(nota.diskon);
+  var sumSub = 0;
+  items.forEach(function (it) { sumSub += num_(it.qty) * num_(it.hargaSatuan); });
+  if (sumSub <= 0) throw new Error('Subtotal item harus lebih dari 0.');
+
+  var status = nota.status || 'Dipesan';
+  var tglPesan = nota.tanggalPesan || todayStr_();
+  var tglTerima = (status === 'Diterima') ? (nota.tanggalTerima || todayStr_()) : (nota.tanggalTerima || '');
+  var id = 'BLJ' + (new Date()).getTime();
+  var ts = new Date();
+  var totalNota = sumSub + ongkir - diskon;
+
+  shB.appendRow([id, ts, tglPesan, tglTerima, nota.sumber || '', nota.supplier || '',
+                 sumSub, ongkir, diskon, totalNota, status, body.user || '', nota.catatan || '']);
+
+  var rows = [], baris = 0;
+  items.forEach(function (it) {
+    baris++;
+    var q = num_(it.qty), h = num_(it.hargaSatuan);
+    var sub = q * h;
+    var prop = sumSub > 0 ? sub / sumSub : 0;
+    var aOngkir = ongkir * prop, aDiskon = diskon * prop;
+    var riilTotal = sub + aOngkir - aDiskon;
+    var riilUnit = q > 0 ? riilTotal / q : 0;
+    var klas = it.klasifikasi || 'BHP';
+    var kode = (KLAS_STOK[klas] && it.kodeMaster) ? it.kodeMaster : '';
+    var kelompok = (kode && masterByKode[kode]) ? masterByKode[kode].kelompok : (it.kelompok || '');
+    rows.push([id, baris, it.nama || '', q, h, sub, aOngkir, aDiskon, riilTotal, riilUnit, klas, kode, kelompok]);
+  });
+  shI.getRange(shI.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+
+  if (status === 'Diterima') queueAssets_(id);
+  SpreadsheetApp.flush();
+  return { idBelanja: id, totalNota: totalNota, items: rows.length, status: status };
+}
+
+// Masukkan item ber-klasifikasi Aset (status Diterima) ke antrian_aset, hindari duplikat.
+function queueAssets_(idBelanja) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var nota = indexBy_(readSheet_(SHEETS.belanja), 'idBelanja')[idBelanja];
+  if (!nota) return;
+  var items = readSheet_(SHEETS.itemBelanja).filter(function (it) {
+    return it.idBelanja === idBelanja && String(it.klasifikasi) === 'Aset';
+  });
+  if (!items.length) return;
+
+  var shA = ss.getSheetByName(SHEETS.antrianAset);
+  var existing = {};
+  readSheet_(SHEETS.antrianAset).forEach(function (a) {
+    if (a.idBelanja === idBelanja) existing[String(a.nama)] = true;
+  });
+  var ts = new Date(), rows = [];
+  items.forEach(function (it) {
+    if (existing[String(it.nama)]) return;
+    var aid = 'AST' + (new Date()).getTime() + '-' + baris3_(rows.length);
+    rows.push([aid, ts, idBelanja, it.nama, nota.tanggalTerima || todayStr_(),
+               num_(it.hargaRiilTotal), nota.sumber || '', 'Aset', 'Belum dicatat']);
+  });
+  if (rows.length) shA.getRange(shA.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+}
+function baris3_(n) { return ('00' + n).slice(-3); }
+
+function updateBelanjaStatus_(body) {
+  var id = body.idBelanja;
+  if (!id) throw new Error('idBelanja wajib.');
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.belanja);
+  var rowIdx = findRow_(sh, 'idBelanja', id);
+  if (rowIdx < 0) throw new Error('Nota tidak ditemukan: ' + id);
+  var statusCol = HEADERS.belanja.indexOf('status') + 1;
+  var terimaCol = HEADERS.belanja.indexOf('tanggalTerima') + 1;
+  if (body.status) sh.getRange(rowIdx, statusCol).setValue(body.status);
+  if (body.status === 'Diterima') {
+    sh.getRange(rowIdx, terimaCol).setValue(body.tanggalTerima || todayStr_());
+    SpreadsheetApp.flush();
+    queueAssets_(id);
+  }
+  SpreadsheetApp.flush();
+  return { idBelanja: id, status: body.status };
+}
+
+function updateAntrianAset_(body) {
+  var id = body.idAset;
+  if (!id) throw new Error('idAset wajib.');
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.antrianAset);
+  var rowIdx = findRow_(sh, 'idAset', id);
+  if (rowIdx < 0) throw new Error('Antrian aset tidak ditemukan: ' + id);
+  var col = HEADERS.antrianAset.indexOf('statusCatat') + 1;
+  var val = body.statusCatat || 'Sudah dicatat';
+  sh.getRange(rowIdx, col).setValue(val);
+  SpreadsheetApp.flush();
+  return { idAset: id, statusCatat: val };
+}
+
+// Daftar nota + itemnya (terbaru dulu).
+function getBelanja_(periode) {
+  var byId = {};
+  readSheet_(SHEETS.itemBelanja).forEach(function (it) {
+    (byId[it.idBelanja] = byId[it.idBelanja] || []).push({
+      baris: num_(it.baris), nama: it.nama, qty: num_(it.qty), hargaSatuan: num_(it.hargaSatuan),
+      hargaRiilTotal: num_(it.hargaRiilTotal), hargaRiilUnit: num_(it.hargaRiilUnit),
+      klasifikasi: it.klasifikasi, kodeMaster: it.kodeMaster, kelompok: it.kelompok,
+    });
+  });
+  var out = readSheet_(SHEETS.belanja).filter(function (b) { return b.idBelanja; }).map(function (b) {
+    return {
+      idBelanja: b.idBelanja, tanggalPesan: fmtDate_(b.tanggalPesan), tanggalTerima: fmtDate_(b.tanggalTerima),
+      sumber: b.sumber, supplier: b.supplier, subtotal: num_(b.subtotal), ongkir: num_(b.ongkir),
+      diskon: num_(b.diskon), totalNota: num_(b.totalNota), status: b.status, user: b.user, catatan: b.catatan,
+      items: (byId[b.idBelanja] || []).sort(function (a, c) { return a.baris - c.baris; }),
+    };
+  });
+  out.reverse();
+  return out;
+}
+
+// Rekap angka siap salin ke Akoontan (per periode YYYY-MM).
+function getRekap_(periode) {
+  var per = periode || todayStr_().slice(0, 7);
+  var belanja = readSheet_(SHEETS.belanja);
+  var master = indexBy_(readSheet_(SHEETS.master), 'kode');
+
+  var recvInPeriod = {};
+  belanja.forEach(function (b) {
+    if (String(b.status) === 'Diterima' && fmtDate_(b.tanggalTerima).slice(0, 7) === per) recvInPeriod[b.idBelanja] = b;
+  });
+
+  var totalPersediaan = 0, totalBebanAlkes = 0;
+  readSheet_(SHEETS.itemBelanja).forEach(function (it) {
+    if (!recvInPeriod[it.idBelanja]) return;
+    var v = num_(it.hargaRiilTotal);
+    if (KLAS_STOK[it.klasifikasi]) totalPersediaan += v;
+    else if (String(it.klasifikasi) === 'Alkes') totalBebanAlkes += v;
+  });
+
+  var aset = readSheet_(SHEETS.antrianAset)
+    .filter(function (a) { return a.idAset && String(a.statusCatat) !== 'Sudah dicatat'; })
+    .map(function (a) {
+      return { idAset: a.idAset, nama: a.nama, tanggalTerima: fmtDate_(a.tanggalTerima),
+               hargaTotal: num_(a.hargaTotal), sumber: a.sumber };
+    });
+
+  var avg = avgCostByKode_();
+  var hpp = {};
+  readSheet_(SHEETS.pakai).forEach(function (r) {
+    if (fmtDate_(r.tanggal).slice(0, 7) !== per) return;
+    var kel = r.kelompok || (master[r.kode] ? master[r.kode].kelompok : 'Lainnya');
+    var cost = (avg[r.kode] != null) ? avg[r.kode] : (master[r.kode] ? num_(master[r.kode].hargaAcuan) : 0);
+    hpp[kel] = (hpp[kel] || 0) + num_(r.jumlah) * cost;
+  });
+
+  var selisih = readSheet_(SHEETS.opname)
+    .filter(function (o) { return fmtDate_(o.tanggal).slice(0, 7) === per && num_(o.selisih) !== 0; })
+    .map(function (o) {
+      return { kode: o.kode, nama: o.nama, kelompok: o.kelompok, selisih: num_(o.selisih), tanggal: fmtDate_(o.tanggal) };
+    });
+
+  return {
+    periode: per,
+    persediaan: { totalPersediaan: Math.round(totalPersediaan), totalBebanAlkes: Math.round(totalBebanAlkes) },
+    antrianAset: aset,
+    hppPemakaian: Object.keys(hpp).map(function (k) { return { kelompok: k, total: Math.round(hpp[k]) }; }),
+    selisihOpname: selisih,
+  };
+}
+
+// ----------------------------------------------------------------------------
 // Util
 // ----------------------------------------------------------------------------
+// Cari nomor baris (1-based, termasuk header) berdasarkan nilai di kolom bernama colName.
+function findRow_(sh, colName, value) {
+  var data = sh.getDataRange().getValues();
+  if (!data.length) return -1;
+  var col = data[0].indexOf(colName);
+  if (col < 0) return -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][col]) === String(value)) return i + 1;
+  }
+  return -1;
+}
+
 function readSheet_(name) {
   var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
   if (!sh) return [];

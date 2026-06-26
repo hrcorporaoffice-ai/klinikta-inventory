@@ -50,7 +50,32 @@ async function post(action, payload) {
   return out.data
 }
 
+// READ tambahan (GET)
+export async function getBelanja(periode) {
+  ensureUrl()
+  const url = new URL(GAS_URL)
+  url.searchParams.set('action', 'getBelanja')
+  if (periode) url.searchParams.set('periode', periode)
+  const res = await fetch(url.toString(), { method: 'GET', redirect: 'follow' })
+  const out = await res.json()
+  if (!out.ok) throw new Error(out.error || 'Gagal memuat belanja.')
+  return out.data
+}
+
+export async function getRekap(periode) {
+  ensureUrl()
+  const url = new URL(GAS_URL)
+  url.searchParams.set('action', 'getRekap')
+  if (periode) url.searchParams.set('periode', periode)
+  const res = await fetch(url.toString(), { method: 'GET', redirect: 'follow' })
+  const out = await res.json()
+  if (!out.ok) throw new Error(out.error || 'Gagal memuat rekap.')
+  return out.data
+}
+
 export const login = (payload) => post('login', payload)
 export const savePakai = (payload) => post('savePakai', payload)
-export const saveMasuk = (payload) => post('saveMasuk', payload)
 export const saveOpname = (payload) => post('saveOpname', payload)
+export const saveBelanja = (payload) => post('saveBelanja', payload)
+export const updateBelanjaStatus = (payload) => post('updateBelanjaStatus', payload)
+export const updateAntrianAset = (payload) => post('updateAntrianAset', payload)

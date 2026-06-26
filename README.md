@@ -3,9 +3,17 @@
 Web app sub-ledger persediaan KLINIKTA — pencatatan stok BHP/Alkes/Obat per item.
 Buku gudang detail yang nantinya menyuplai angka ringkasan ke Akoontan (LAPKEU).
 
-**Tahap saat ini: Tahap 1 — BHP Gigi (fondasi).** Grid isi cepat 61 item gigi,
-3 mode (Pemakaian / Opname / Barang Masuk), responsif HP & laptop, simpan ke Google Sheets.
-Belum menyentuh Akoontan/RME (lihat [SPEK_TEKNIS](SPEK_TEKNIS_Inventory_KLINIKTA.md) §8).
+**Tahap saat ini: Tahap 1 + modul Belanja.** Grid isi cepat per item, responsif HP & laptop,
+simpan ke Google Sheets. **4 mode:**
+1. **Pemakaian Hari Ini** — keluar gudang = HPP
+2. **Stok Opname** — cek fisik berkala
+3. **Belanja & Terima** — catat belanja (alokasi ongkir/diskon proporsional), klasifikasi
+   BHP/Alkes/Aset, 3 jalur saat diterima (BHP/Obat→stok, Alkes→beban, Aset→antrian),
+   pemetaan ke item master
+4. **Rekap → LAPKEU** — angka siap salin ke Akoontan (Level 1, manual)
+
+Integrasi otomatis ke Akoontan belum disentuh (lihat [SPEK_TEKNIS](SPEK_TEKNIS_Inventory_KLINIKTA.md) §7
+& [SPEK_TAMBAHAN](SPEK_TAMBAHAN_Integrasi_Belanja.md)).
 
 > ⚠️ **Project ini TERPISAH PENUH dari web app absensi.** Repo, project Vercel,
 > spreadsheet, deployment GAS, dan folder Drive semuanya milik inventory sendiri.
@@ -42,8 +50,10 @@ SPEK_TEKNIS_Inventory_KLINIKTA.md   Spesifikasi & aturan main Akoontan
 ```
 
 ## Sheet database
-`setup()` membuat: `master_item`, `transaksi_masuk`, `transaksi_pakai`, `opname`,
-`rekap_bulanan`, dan `users` (staf + PIN). Aman dijalankan ulang (tidak menimpa data).
+`setup()` membuat: `master_item`, `transaksi_pakai`, `opname`, `transaksi_belanja`,
+`item_belanja`, `antrian_aset`, `rekap_bulanan`, dan `users` (staf + PIN).
+Aman dijalankan ulang (idempoten, tidak menimpa data). Modul Belanja menggantikan
+`transaksi_masuk` lama dengan `transaksi_belanja` + `item_belanja` yang lebih detail.
 
 ## Login staf & log "siapa input"
 Staf login dengan **memilih nama + PIN ringan** (diatur di sheet `users`). Nama staf

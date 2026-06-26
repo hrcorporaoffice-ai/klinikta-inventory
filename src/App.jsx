@@ -1,12 +1,16 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { MASTER_ITEMS, KELOMPOK } from './data/masterItems.js'
 import * as api from './api.js'
+import Belanja from './components/Belanja.jsx'
+import Rekap from './components/Rekap.jsx'
 
 const MODES = [
-  { id: 'pakai',  label: 'Pemakaian Hari Ini', sub: 'Isi yang terpakai hari ini', chip: 'b' },
-  { id: 'opname', label: 'Stok Opname',         sub: 'Hitung sisa fisik berkala',  chip: 'n' },
-  { id: 'masuk',  label: 'Barang Masuk',        sub: 'Catat pembelian diterima',   chip: 'r' },
+  { id: 'pakai',   label: 'Pemakaian Hari Ini', sub: 'Isi yang terpakai hari ini', chip: 'b' },
+  { id: 'opname',  label: 'Stok Opname',         sub: 'Hitung sisa fisik berkala',  chip: 'n' },
+  { id: 'belanja', label: 'Belanja & Terima',    sub: 'Catat belanja & penerimaan', chip: 'r' },
+  { id: 'rekap',   label: 'Rekap → LAPKEU',      sub: 'Angka siap salin Akoontan',  chip: 'n' },
 ]
+const GRID_MODES = ['pakai', 'opname']  // mode yang pakai grid item + savebar
 
 const rupiah = (n) => 'Rp ' + new Intl.NumberFormat('id-ID').format(Math.round(n || 0))
 const BADGE = { aman: ['ok', 'aman'], menipis: ['warn', 'menipis'], low: ['low', 'stok rendah'] }
@@ -53,8 +57,6 @@ function InventoryApp({ user, onLogout }) {
   const [error, setError] = useState('')
 
   const [inputs, setInputs] = useState({})    // kode -> value (mode-dependent)
-  const [supplier, setSupplier] = useState('')
-  const [noFaktur, setNoFaktur] = useState('')
   const [query, setQuery] = useState('')
   const [filterSub, setFilterSub] = useState('Semua')
   const [saving, setSaving] = useState(false)
@@ -81,7 +83,7 @@ function InventoryApp({ user, onLogout }) {
 
   // Ganti kelompok/mode → bersihkan input agar tidak tercampur.
   useEffect(() => { setInputs({}); setFilterSub('Semua') }, [group])
-  useEffect(() => { setInputs({}); setSupplier(''); setNoFaktur('') }, [mode])
+  useEffect(() => { setInputs({}) }, [mode])
 
   const items = state?.items || []
   const counts = state?.counts || MASTER_COUNTS
@@ -114,8 +116,6 @@ function InventoryApp({ user, onLogout }) {
 
   // ---- input helpers ----
   const setQty = (kode, val) => setInputs((p) => ({ ...p, [kode]: val }))
-  const setMasuk = (kode, field, val) =>
-    setInputs((p) => ({ ...p, [kode]: { ...(p[kode] || {}), [field]: val } }))
   const stepQty = (kode, delta) =>
     setInputs((p) => {
       const cur = Number(p[kode]) || 0
@@ -130,18 +130,10 @@ function InventoryApp({ user, onLogout }) {
       Object.values(inputs).forEach((v) => { const x = Number(v); if (x > 0) { n++; units += x } })
       return { n, text: `${n} item terisi · total ${units} unit dipakai`, canSave: n > 0 }
     }
-    if (mode === 'opname') {
-      let n = 0
-      Object.values(inputs).forEach((v) => { if (v !== '' && v != null && !isNaN(Number(v))) n++ })
-      return { n, text: `${n} item dihitung fisik`, canSave: n > 0 }
-    }
-    // masuk
-    let n = 0, total = 0
-    Object.values(inputs).forEach((v) => {
-      const q = Number(v?.qty), h = Number(v?.harga)
-      if (q > 0) { n++; total += q * (h || 0) }
-    })
-    return { n, text: `${n} item · total ${rupiah(total)}`, canSave: n > 0 }
+    // opname
+    let n = 0
+    Object.values(inputs).forEach((v) => { if (v !== '' && v != null && !isNaN(Number(v))) n++ })
+    return { n, text: `${n} item dihitung fisik`, canSave: n > 0 }
   }, [inputs, mode])
 
   async function handleSave() {
@@ -154,19 +146,14 @@ function InventoryApp({ user, onLogout }) {
           .map(([kode, v]) => ({ kode, qty: Number(v) }))
           .filter((l) => l.qty > 0)
         res = await api.savePakai({ kelompok: group, tanggal: today, user: user.nama, lines })
-      } else if (mode === 'opname') {
+      } else {
         const lines = Object.entries(inputs)
           .filter(([, v]) => v !== '' && v != null && !isNaN(Number(v)))
           .map(([kode, v]) => ({ kode, stokFisik: Number(v) }))
         res = await api.saveOpname({ kelompok: group, tanggal: today, user: user.nama, lines })
-      } else {
-        const lines = Object.entries(inputs)
-          .map(([kode, v]) => ({ kode, qty: Number(v?.qty), harga: Number(v?.harga) || 0, supplier, noFaktur }))
-          .filter((l) => l.qty > 0)
-        res = await api.saveMasuk({ kelompok: group, tanggal: today, user: user.nama, lines })
       }
       showToast('ok', `Tersimpan: ${res.tersimpan} item.`)
-      setInputs({}); setSupplier(''); setNoFaktur('')
+      setInputs({})
       await load()
     } catch (e) {
       showToast('err', e.message)
@@ -176,6 +163,7 @@ function InventoryApp({ user, onLogout }) {
   }
 
   const modeMeta = MODES.find((m) => m.id === mode)
+  const isGrid = GRID_MODES.includes(mode)
 
   return (
     <>
@@ -225,87 +213,80 @@ function InventoryApp({ user, onLogout }) {
           ))}
         </div>
 
-        {/* Toolbar */}
-        <div className="toolbar">
-          <div className="search">
-            🔍<input
-              placeholder="Cari item… (mis. komposit, paper point)"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-          <button
-            className={'filter' + (filterSub === 'Semua' ? ' on' : '')}
-            onClick={() => setFilterSub('Semua')}
-          >Semua</button>
-          {subKategoris.map((s) => (
-            <button
-              key={s}
-              className={'filter' + (filterSub === s ? ' on' : '')}
-              onClick={() => setFilterSub(s)}
-            >{s}</button>
-          ))}
-        </div>
-
-        {/* Supplier batch (mode Barang Masuk) */}
-        {mode === 'masuk' && (
-          <div className="toolbar">
-            <div className="search" style={{ flex: 1 }}>
-              🏷️<input placeholder="Supplier (opsional, berlaku semua baris)" value={supplier}
-                onChange={(e) => setSupplier(e.target.value)} />
-            </div>
-            <div className="search" style={{ flex: 1 }}>
-              🧾<input placeholder="No. faktur (opsional)" value={noFaktur}
-                onChange={(e) => setNoFaktur(e.target.value)} />
-            </div>
-          </div>
-        )}
-
-        {/* Grid */}
-        <div className="card">
-          <div className="cap">
-            <h2>{modeMeta.label} · {lengkap}</h2>
-            <span className="meta">{group} · {visible.length} item</span>
-          </div>
-
-          {loading ? (
-            <div className="state"><span className="spin" />Memuat data…</div>
-          ) : error ? (
-            <div className="state err">
-              ⚠️ {error}
-              <div style={{ marginTop: 10 }}>
-                <button className="btn ghost" onClick={load}>Coba lagi</button>
+        {isGrid ? (
+          <>
+            {/* Toolbar */}
+            <div className="toolbar">
+              <div className="search">
+                🔍<input
+                  placeholder="Cari item… (mis. komposit, paper point)"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
               </div>
+              <button
+                className={'filter' + (filterSub === 'Semua' ? ' on' : '')}
+                onClick={() => setFilterSub('Semua')}
+              >Semua</button>
+              {subKategoris.map((s) => (
+                <button
+                  key={s}
+                  className={'filter' + (filterSub === s ? ' on' : '')}
+                  onClick={() => setFilterSub(s)}
+                >{s}</button>
+              ))}
             </div>
-          ) : visible.length === 0 ? (
-            <div className="state">Tidak ada item cocok.</div>
-          ) : (
-            <>
-              <DesktopTable grouped={grouped} mode={mode} inputs={inputs}
-                setQty={setQty} setMasuk={setMasuk} />
-              <MobileList grouped={grouped} mode={mode} inputs={inputs}
-                setQty={setQty} setMasuk={setMasuk} stepQty={stepQty} />
-            </>
-          )}
-        </div>
 
-        <p className="note">
-          Tahap 1 — BHP Gigi. Data tersimpan ke Google Sheets (bukan di HP ini),
-          jadi bisa dibuka dari HP & laptop mana pun.
-        </p>
+            {/* Grid */}
+            <div className="card">
+              <div className="cap">
+                <h2>{modeMeta.label} · {lengkap}</h2>
+                <span className="meta">{group} · {visible.length} item</span>
+              </div>
+
+              {loading ? (
+                <div className="state"><span className="spin" />Memuat data…</div>
+              ) : error ? (
+                <div className="state err">
+                  ⚠️ {error}
+                  <div style={{ marginTop: 10 }}>
+                    <button className="btn ghost" onClick={load}>Coba lagi</button>
+                  </div>
+                </div>
+              ) : visible.length === 0 ? (
+                <div className="state">Tidak ada item cocok.</div>
+              ) : (
+                <>
+                  <DesktopTable grouped={grouped} mode={mode} inputs={inputs} setQty={setQty} />
+                  <MobileList grouped={grouped} mode={mode} inputs={inputs} setQty={setQty} stepQty={stepQty} />
+                </>
+              )}
+            </div>
+
+            <p className="note">
+              Data tersimpan ke Google Sheets (bukan di HP ini), jadi bisa dibuka dari HP &amp; laptop mana pun.
+            </p>
+          </>
+        ) : mode === 'belanja' ? (
+          <Belanja user={user} today={today} onToast={showToast} onChanged={load} />
+        ) : (
+          <Rekap today={today} onToast={showToast} />
+        )}
       </div>
 
-      {/* Sticky save */}
-      <div className="savebar">
-        <div className="sum">{summary.text}</div>
-        <div className="actions">
-          <button className="btn ghost" disabled={!summary.canSave || saving}
-            onClick={() => { setInputs({}); setSupplier(''); setNoFaktur('') }}>Reset</button>
-          <button className="btn" disabled={!summary.canSave || saving} onClick={handleSave}>
-            {saving ? 'Menyimpan…' : saveLabel(mode)}
-          </button>
+      {/* Sticky save — hanya untuk mode grid (Pemakaian/Opname) */}
+      {isGrid && (
+        <div className="savebar">
+          <div className="sum">{summary.text}</div>
+          <div className="actions">
+            <button className="btn ghost" disabled={!summary.canSave || saving}
+              onClick={() => setInputs({})}>Reset</button>
+            <button className="btn" disabled={!summary.canSave || saving} onClick={handleSave}>
+              {saving ? 'Menyimpan…' : saveLabel(mode)}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {toast && <div className={'toast ' + toast.type}>{toast.msg}</div>}
     </>
@@ -379,7 +360,7 @@ function Login({ onLogin }) {
 }
 
 function saveLabel(mode) {
-  return mode === 'pakai' ? 'Simpan Pemakaian' : mode === 'opname' ? 'Simpan Opname' : 'Simpan Barang Masuk'
+  return mode === 'pakai' ? 'Simpan Pemakaian' : 'Simpan Opname'
 }
 
 function Badge({ status }) {
@@ -394,7 +375,7 @@ function StokLabel({ it }) {
 }
 
 // ---------------- Desktop table ----------------
-function DesktopTable({ grouped, mode, inputs, setQty, setMasuk }) {
+function DesktopTable({ grouped, mode, inputs, setQty }) {
   return (
     <table>
       <thead>
@@ -403,7 +384,6 @@ function DesktopTable({ grouped, mode, inputs, setQty, setMasuk }) {
           <th>{mode === 'opname' ? 'Stok Sistem' : 'Stok Saat Ini'}</th>
           {mode === 'pakai' && <th className="num">Pemakaian Hari Ini</th>}
           {mode === 'opname' && <th className="num">Stok Fisik</th>}
-          {mode === 'masuk' && <th className="masuk">Jumlah Masuk + Harga/Unit</th>}
         </tr>
       </thead>
       <tbody>
@@ -445,28 +425,6 @@ function DesktopTable({ grouped, mode, inputs, setQty, setMasuk }) {
                     )}
                   </td>
                 )}
-                {mode === 'masuk' && (
-                  <td className="num">
-                    <div className="masukcell">
-                      <input
-                        type="number" min="0" inputMode="numeric"
-                        className={'qty' + (Number(inputs[it.kode]?.qty) > 0 ? ' filled' : '')}
-                        placeholder="0 jumlah" value={inputs[it.kode]?.qty ?? ''}
-                        onChange={(e) => setMasuk(it.kode, 'qty', e.target.value)}
-                      />
-                      <input
-                        type="number" min="0" inputMode="numeric" className="price"
-                        placeholder={`Rp ${it.hargaAcuan || 0}`} value={inputs[it.kode]?.harga ?? ''}
-                        onChange={(e) => setMasuk(it.kode, 'harga', e.target.value)}
-                      />
-                      {Number(inputs[it.kode]?.qty) > 0 && (
-                        <div className="rowtotal">
-                          {rupiah(Number(inputs[it.kode]?.qty) * (Number(inputs[it.kode]?.harga) || it.hargaAcuan || 0))}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                )}
               </tr>
             ))}
           </React.Fragment>
@@ -477,34 +435,13 @@ function DesktopTable({ grouped, mode, inputs, setQty, setMasuk }) {
 }
 
 // ---------------- Mobile list ----------------
-function MobileList({ grouped, mode, inputs, setQty, setMasuk, stepQty }) {
+function MobileList({ grouped, mode, inputs, setQty, stepQty }) {
   return (
     <div className="mlist">
       {grouped.map(([sub, list]) => (
         <React.Fragment key={sub}>
           <div className="grp" style={{ padding: '7px 13px' }}>{sub}</div>
-          {list.map((it) =>
-            mode === 'masuk' ? (
-              <div className="mcard-masuk" key={it.kode}>
-                <div className="mtop">
-                  <div className="info">
-                    <div className="n">{it.nama}{it.metode === 'Detail' && <span className="tag-detail">DETAIL</span>}</div>
-                    <div className="s">{it.stok} {it.satuan} <Badge status={it.status} /></div>
-                  </div>
-                </div>
-                <div className="mfields">
-                  <input type="number" min="0" inputMode="numeric" placeholder="Jumlah masuk"
-                    value={inputs[it.kode]?.qty ?? ''} onChange={(e) => setMasuk(it.kode, 'qty', e.target.value)} />
-                  <input type="number" min="0" inputMode="numeric" placeholder={`Harga/unit (${rupiah(it.hargaAcuan)})`}
-                    value={inputs[it.kode]?.harga ?? ''} onChange={(e) => setMasuk(it.kode, 'harga', e.target.value)} />
-                </div>
-                {Number(inputs[it.kode]?.qty) > 0 && (
-                  <div className="rowtotal" style={{ marginTop: 6 }}>
-                    Total {rupiah(Number(inputs[it.kode]?.qty) * (Number(inputs[it.kode]?.harga) || it.hargaAcuan || 0))}
-                  </div>
-                )}
-              </div>
-            ) : (
+          {list.map((it) => (
               <div className="mcard" key={it.kode}>
                 <div className="info">
                   <div className="n">{it.nama}{it.metode === 'Detail' && <span className="tag-detail">DETAIL</span>}</div>

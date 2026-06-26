@@ -133,9 +133,80 @@ td.num{text-align:center}
 .toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 18px;border-radius:10px;font-size:14px;z-index:50;box-shadow:0 6px 20px rgba(0,0,0,.2);max-width:90vw}
 .toast.ok{background:var(--ok)} .toast.err{background:var(--red)}
 
+/* ---------- Belanja & Terima ---------- */
+.linklike{background:none;border:none;color:var(--blue);font-size:13px;cursor:pointer;font-weight:600}
+.muted{color:var(--muted)}
+.panduan{padding:12px 14px;background:#f0f7fc;border-bottom:1px solid var(--line);font-size:13px;line-height:1.7}
+.panduan .muted{margin-top:6px;font-size:12px}
+.bform{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px}
+.bform label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:600}
+.bform input,.bform select{padding:9px 10px;border:1.5px solid var(--line);border-radius:9px;font-size:14px;outline:none;background:#fff;color:var(--ink)}
+.bform input:focus,.bform select:focus{border-color:var(--blue)}
+.bitems{padding:0 14px 8px}
+.bitem{border:1px solid var(--line);border-radius:11px;padding:9px;margin-bottom:8px;background:#fcfdff}
+.bitem-main{display:flex;gap:7px;align-items:center}
+.bi-nama{flex:1;min-width:0;padding:9px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;outline:none}
+.bi-qty{width:64px;padding:9px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;text-align:center;outline:none}
+.bi-harga{width:120px;padding:9px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;text-align:right;outline:none}
+.bi-klas{padding:9px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;background:#fff;outline:none}
+.bi-nama:focus,.bi-qty:focus,.bi-harga:focus,.bi-klas:focus{border-color:var(--blue)}
+.bi-del{width:34px;height:38px;border:1.5px solid var(--line);background:#fff;border-radius:8px;color:var(--muted);cursor:pointer;font-size:13px}
+.bi-del:hover{border-color:var(--red);color:var(--red)}
+.bitem-sub{display:flex;align-items:center;gap:10px;margin-top:7px;flex-wrap:wrap}
+.bi-map{flex:1;min-width:200px;padding:8px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;background:#fff;outline:none}
+.bi-map.err{border-color:var(--red);background:#fdeaea}
+.bi-riil{font-size:12px;color:var(--navy);font-weight:600;font-variant-numeric:tabular-nums}
+.addrow{width:100%;margin-top:2px}
+.btotals{padding:6px 14px 0;max-width:340px;margin-left:auto}
+.bt-line{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;color:var(--muted)}
+.bt-line b{color:var(--ink);font-variant-numeric:tabular-nums}
+.bt-line.total{border-top:1px solid var(--line);margin-top:4px;padding-top:8px;font-size:15px;color:var(--navy)}
+.bt-line.total b{color:var(--navy)}
+.bwarn{margin:10px 14px 0;background:#fdf6e3;color:#8a6d00;padding:9px 12px;border-radius:9px;font-size:13px}
+.bsave{padding:12px 14px;display:flex;justify-content:flex-end}
+
+/* Riwayat nota */
+.notalist{padding:6px 0}
+.nota{padding:12px 14px;border-bottom:1px solid #f0f2f5}
+.nota-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.nota-title{font-weight:600}
+.nota-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.nota-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.nota-total{font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums}
+.nota-items{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.nota-chip{font-size:11.5px;background:var(--soft);border-radius:7px;padding:3px 8px;color:var(--ink)}
+.nota-chip i{color:var(--muted);font-style:normal}
+.nota-actions{display:flex;gap:8px;margin-top:10px;justify-content:flex-end}
+.btn.sm{padding:7px 14px;font-size:13px;border-radius:9px}
+.badge.b{background:#e7f1fb;color:var(--blue)}
+
+/* ---------- Rekap ---------- */
+.periode-pick{font-size:12px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px}
+.periode-pick input{padding:6px 8px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;outline:none}
+.rekap{padding:14px}
+.rekap-note{font-size:12.5px;color:var(--muted);margin-bottom:12px}
+.rekap-h{font-size:14px;color:var(--navy);margin:16px 0 4px;padding-bottom:4px;border-bottom:2px solid var(--soft)}
+.rekap-sub{font-size:12px;color:var(--muted);margin-bottom:6px}
+.rekap-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f4f6f9}
+.rr-label{font-weight:600;font-size:14px}
+.rr-akun{font-size:11.5px;color:var(--muted);margin-top:2px}
+.rr-right{display:flex;align-items:center;gap:10px}
+.rr-val{font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums}
+.rekap-aset{margin-top:10px;background:#fcfdff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.ra-head{font-size:12.5px;font-weight:600;color:var(--navy);margin-bottom:6px}
+.ra-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-top:1px solid #f0f2f5}
+.selisih-list{padding-top:4px}
+.selisih-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f4f6f9;font-size:14px}
+.selisih-row b.neg{color:var(--red)} .selisih-row b.pos{color:var(--ok)}
+
 @media(max-width:760px){
   table{display:none}
   .mlist{display:block}
   .cap .meta{display:none}
-  .tab{min-width:calc(33% - 6px)}
+  .tab{min-width:calc(50% - 6px)}
+  .bform{grid-template-columns:1fr 1fr}
+  .bitem-main{flex-wrap:wrap}
+  .bi-nama{flex-basis:100%}
+  .bi-harga{flex:1}
+  .btotals{max-width:none}
 }
