@@ -49,8 +49,7 @@ export default function App() {
 function InventoryApp({ user, onLogout }) {
   const { tanggal: today, lengkap, periode } = useMemo(todayParts, [])
 
-  const myGroup = user.kelompok || 'BHP Gigi'
-  const [group, setGroup] = useState(myGroup)
+  const [group, setGroup] = useState('BHP Gigi')
   const [mode, setMode] = useState('pakai')
 
   const [state, setState] = useState(null)   // { tanggal, items, counts }
@@ -214,9 +213,6 @@ function InventoryApp({ user, onLogout }) {
               {g} <span className="cnt">{counts[g] ?? MASTER_COUNTS[g] ?? ''}</span>
             </button>
           ))}
-        </div>
-        <div className="crossnote">
-          Anda pegang <b>{myGroup}</b>. Bisa lihat kelompok lain untuk cek agar tidak input ganda.
         </div>
 
         {/* Mode tabs */}

@@ -70,12 +70,13 @@ var HEADERS = {
 
 // Staf contoh — GANTI nama, PIN & peran ini di sheet "users" sesuai staf asli KLINIKTA.
 // Peran: admin | bendahara | penerima | logistik | staf.
+// Peran: admin | bendahara | penerima | logistik (logistik = pesan + terima + masuk stok).
+// Tidak ada peran 'staf' — semua staf setidaknya logistik.
 var USERS_SEED = [
-  ['Admin',      '0000', 'BHP Gigi', 'admin',     true],
-  ['Bendahara',  '2025', 'BHP Umum', 'bendahara', true],
-  ['Penerima',   '2026', 'BHP Umum', 'penerima',  true],
-  ['Logistik',   '2027', 'BHP Gigi', 'logistik',  true],
-  ['Staf Gigi',  '1111', 'BHP Gigi', 'staf',      true],
+  ['Admin',      '0000', '', 'admin',     true],
+  ['Bendahara',  '2025', '', 'bendahara', true],
+  ['Penerima',   '2026', '', 'penerima',  true],
+  ['Logistik',   '2027', '', 'logistik',  true],
 ];
 
 // Kata kunci tebakan klasifikasi awal (dikelola admin di sheet klasifikasi_kw).
@@ -808,14 +809,14 @@ function adminSaveUser_(body) {
   var key = s.originalNama || s.nama;
   var rowIdx = findRow_(sh, 'nama', key);
   if (rowIdx < 0) {
-    sh.appendRow([s.nama, String(s.pin || ''), s.kelompok || 'BHP Gigi', s.peran || 'staf', s.aktif !== false]);
+    sh.appendRow([s.nama, String(s.pin || ''), s.kelompok || '', s.peran || 'logistik', s.aktif !== false]);
     SpreadsheetApp.flush();
     return { nama: s.nama, created: true };
   }
   setCell_(sh, rowIdx, 'nama', s.nama);
   if (s.pin != null && s.pin !== '') setCell_(sh, rowIdx, 'pin', String(s.pin));
-  setCell_(sh, rowIdx, 'kelompok', s.kelompok || 'BHP Gigi');
-  setCell_(sh, rowIdx, 'peran', s.peran || 'staf');
+  setCell_(sh, rowIdx, 'kelompok', s.kelompok || '');
+  setCell_(sh, rowIdx, 'peran', s.peran || 'logistik');
   setCell_(sh, rowIdx, 'aktif', s.aktif !== false);
   SpreadsheetApp.flush();
   return { nama: s.nama, updated: true };

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import * as api from '../api.js'
 
 const KELOMPOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes']
-const PERAN = ['staf', 'bendahara', 'penerima', 'logistik', 'admin']
+const PERAN = ['logistik', 'bendahara', 'penerima', 'admin']
 const splitPeran = (p) => String(p || 'staf').split(',').map((r) => r.trim()).filter(Boolean)
 const joinPeran = (arr) => arr.length ? arr.join(',') : 'staf'
 const SECTIONS = [
@@ -120,7 +120,7 @@ function MasterAdmin({ user, onToast }) {
 }
 
 // ---------------- Staf ----------------
-const emptyStaf = { nama: '', pin: '', kelompok: 'BHP Gigi', peran: 'staf', aktif: true }
+const emptyStaf = { nama: '', pin: '', peran: 'logistik', aktif: true }
 
 function StafAdmin({ user, onToast }) {
   const [list, setList] = useState(null)
@@ -147,22 +147,23 @@ function StafAdmin({ user, onToast }) {
         <div className="bform">
           <label>Nama<input value={edit.nama} onChange={(e) => setEdit({ ...edit, nama: e.target.value })} /></label>
           <label>PIN{edit.originalNama ? ' (kosongkan = tetap)' : ''}<input value={edit.pin} onChange={(e) => setEdit({ ...edit, pin: e.target.value })} /></label>
-          <label>Kelompok<select value={edit.kelompok} onChange={(e) => setEdit({ ...edit, kelompok: e.target.value })}>{KELOMPOK.map((k) => <option key={k}>{k}</option>)}</select></label>
-          <label>Peran</label>
-          <div className="peran-checks">
-            {PERAN.map((p) => {
-              const cur = splitPeran(edit.peran)
-              const checked = cur.includes(p)
-              return (
-                <label key={p} className="peran-check">
-                  <input type="checkbox" checked={checked} onChange={(e) => {
-                    const next = e.target.checked ? [...cur, p] : cur.filter((x) => x !== p)
-                    setEdit({ ...edit, peran: joinPeran(next) })
-                  }} />
-                  {p}
-                </label>
-              )
-            })}
+          <div className="bform-full">
+            <div className="bform-label">Peran</div>
+            <div className="peran-checks">
+              {PERAN.map((p) => {
+                const cur = splitPeran(edit.peran)
+                const checked = cur.includes(p)
+                return (
+                  <label key={p} className="peran-check">
+                    <input type="checkbox" checked={checked} onChange={(e) => {
+                      const next = e.target.checked ? [...cur, p] : cur.filter((x) => x !== p)
+                      setEdit({ ...edit, peran: joinPeran(next) })
+                    }} />
+                    {p}
+                  </label>
+                )
+              })}
+            </div>
           </div>
           <label>Aktif<select value={edit.aktif ? '1' : '0'} onChange={(e) => setEdit({ ...edit, aktif: e.target.value === '1' })}><option value="1">Aktif</option><option value="0">Nonaktif</option></select></label>
         </div>
@@ -181,8 +182,8 @@ function StafAdmin({ user, onToast }) {
         <div className="admin-list">
           {list.map((u) => (
             <div className="admin-row" key={u.nama}>
-              <div><b>{u.nama}</b> <span className="muted">{u.peran} · {u.kelompok}</span></div>
-              <button className="linklike" onClick={() => setEdit({ ...emptyStaf, nama: u.nama, kelompok: u.kelompok, peran: u.peran, originalNama: u.nama, pin: '' })}>Ubah</button>
+              <div><b>{u.nama}</b> <span className="muted">{u.peran}</span></div>
+              <button className="linklike" onClick={() => setEdit({ ...emptyStaf, nama: u.nama, peran: u.peran, originalNama: u.nama, pin: '' })}>Ubah</button>
             </div>
           ))}
         </div>
