@@ -249,6 +249,7 @@ function doPost(e) {
       case 'saveUser':            result = adminSaveUser_(body); break;
       case 'saveKeyword':         result = adminSaveKeyword_(body); break;
       case 'deleteKeyword':       result = adminDeleteKeyword_(body); break;
+      case 'resyncSheets':        result = resyncSheets_(body); break;
       default: return json_({ ok: false, error: 'Action POST tidak dikenal: ' + action });
     }
     return json_({ ok: true, data: result });
@@ -740,6 +741,38 @@ function mirrorBelanja_(nota, items) {
   }
   SpreadsheetApp.flush();
   return { idBelanja: nota.idBelanja, items: (items || []).length };
+}
+
+// Sinkron penuh: kosongkan tiap sheet (sisakan header) lalu tulis ulang dari data
+// yang dikirim app (sumber kebenaran = RTDB). Menjadikan spreadsheet cermin tepat.
+function resyncSheets_(body) {
+  var d = body.data || {};
+  return {
+    synced: true,
+    counts: {
+      master:      clearAndWrite_(SHEETS.master, d.master),
+      pakai:       clearAndWrite_(SHEETS.pakai, d.pakai),
+      opname:      clearAndWrite_(SHEETS.opname, d.opname),
+      belanja:     clearAndWrite_(SHEETS.belanja, d.belanja),
+      itemBelanja: clearAndWrite_(SHEETS.itemBelanja, d.itemBelanja),
+      antrian:     clearAndWrite_(SHEETS.antrianAset, d.antrian),
+      keywords:    clearAndWrite_(SHEETS.klasifikasiKw, d.keywords),
+    },
+  };
+}
+
+function clearAndWrite_(sheetName, rows) {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (!sh) return 0;
+  var lastRow = sh.getLastRow();
+  if (lastRow > 1) sh.getRange(2, 1, lastRow - 1, sh.getLastColumn()).clearContent();
+  if (rows && rows.length) {
+    var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    var out = rows.map(function (r) { return head.map(function (h) { return r[h] != null ? r[h] : ''; }); });
+    sh.getRange(2, 1, out.length, head.length).setValues(out);
+  }
+  SpreadsheetApp.flush();
+  return rows ? rows.length : 0;
 }
 
 // Daftar nota + itemnya (terbaru dulu).

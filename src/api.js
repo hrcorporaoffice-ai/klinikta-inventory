@@ -607,6 +607,45 @@ export async function getBrand() {
   return { ...BRAND_DEFAULT, ...b, logo }
 }
 
+// Sinkron penuh RTDB → Google Sheets (kosongkan lalu tulis ulang). Admin-only.
+// Dipakai untuk menjadikan spreadsheet cermin tepat + membersihkan data lama.
+export async function resyncSheets({ user }) {
+  await requireAdmin(user)
+  if (!GAS_URL) throw new Error('VITE_GAS_URL belum diisi (dibutuhkan untuk sinkron Sheets).')
+
+  const masterObj = await masterByKode()
+  const master = Object.values(masterObj).map((m) => ({
+    kode: m.kode, nama: m.nama, kelompok: m.kelompok, kategoriProduk: m.kategoriProduk || m.kelompok,
+    subKategori: m.subKategori || '', satuan: m.satuan || '', kemasan: m.kemasan || '',
+    hargaAcuan: num(m.hargaAcuan), kategoriDefault: m.kategoriDefault || '', metode: m.metode || 'Praktis',
+    titikReorder: (m.titikReorder === '' || m.titikReorder == null) ? '' : num(m.titikReorder),
+    aktif: !(m.aktif === false || String(m.aktif) === 'false'),
+  }))
+  const pakai = valuesOf(await rdbGet('pakai')).map((r) => ({
+    timestamp: r.ts ? new Date(r.ts).toISOString() : '', tanggal: fmtDate(r.tanggal), kelompok: r.kelompok,
+    kode: r.kode, nama: r.nama, jumlah: num(r.jumlah), user: r.user || '', catatan: r.catatan || '',
+  }))
+  const opname = valuesOf(await rdbGet('opname')).map((r) => ({
+    timestamp: r.ts ? new Date(r.ts).toISOString() : '', tanggal: fmtDate(r.tanggal), kelompok: r.kelompok,
+    kode: r.kode, nama: r.nama, stokSistem: num(r.stokSistem), stokFisik: num(r.stokFisik),
+    selisih: num(r.selisih), user: r.user || '', catatan: r.catatan || '',
+  }))
+  const bel = await belanjaArray()
+  const belanja = bel.map((b) => belanjaToSheet(b).nota)
+  const itemBelanja = bel.flatMap((b) => belanjaToSheet(b).items)
+  const antrian = valuesOf(await rdbGet('antrian_aset')).map(antrianToSheet)
+  const keywords = valuesOf(await rdbGet('klasifikasi_kw')).map((k) => ({ klasifikasi: k.klasifikasi, keyword: k.keyword }))
+
+  const res = await fetch(GAS_URL, {
+    method: 'POST', redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'resyncSheets', user, data: { master, pakai, opname, belanja, itemBelanja, antrian, keywords } }),
+  })
+  const out = await res.json()
+  if (!out.ok) throw new Error(out.error || 'Gagal sinkron ke Sheets.')
+  return out.data
+}
+
 export async function saveBrand({ user, brand }) {
   await requireAdmin(user)
   const { logo, ...rest } = brand || {}

@@ -29,7 +29,7 @@ export default function Admin({ user, onToast, onBrandSaved }) {
         {sec === 'staf' && <StafAdmin user={user} onToast={onToast} />}
         {sec === 'kw' && <KeywordAdmin user={user} onToast={onToast} />}
         {sec === 'tampilan' && <BrandPanel user={user} onToast={onToast} onSaved={onBrandSaved} />}
-        {sec === 'ekspor' && <Ekspor onToast={onToast} />}
+        {sec === 'ekspor' && <Ekspor user={user} onToast={onToast} />}
       </div>
     </div>
   )
@@ -357,8 +357,19 @@ function KeywordAdmin({ user, onToast }) {
 }
 
 // ---------------- Ekspor ----------------
-function Ekspor({ onToast }) {
+function Ekspor({ user, onToast }) {
   const [busy, setBusy] = useState('')
+  const [syncing, setSyncing] = useState(false)
+
+  async function resync() {
+    if (!window.confirm('Tulis ulang Google Spreadsheet agar sama persis dengan data app sekarang? Baris lama di sheet akan ditimpa.')) return
+    setSyncing(true)
+    try {
+      const r = await api.resyncSheets({ user: user.nama })
+      const c = r.counts || {}
+      onToast('ok', `Sinkron selesai: ${c.master || 0} master, ${c.pakai || 0} pakai, ${c.belanja || 0} belanja, ${c.opname || 0} opname.`)
+    } catch (e) { onToast('err', e.message) } finally { setSyncing(false) }
+  }
 
   function toCSV(rows) {
     if (!rows.length) return ''
@@ -382,10 +393,16 @@ function Ekspor({ onToast }) {
 
   return (
     <div className="admin-form">
-      <p className="rekap-sub">Unduh data sebagai CSV (bisa dibuka di Excel/Sheets). Data lengkap selalu tersedia di spreadsheet sumber.</p>
+      <p className="rekap-sub">Unduh data sebagai CSV (bisa dibuka di Excel/Sheets).</p>
       <div className="actions">
         <button className="btn ghost" disabled={busy} onClick={() => exp('master')}>{busy === 'master' ? '…' : 'Ekspor Item Master'}</button>
         <button className="btn ghost" disabled={busy} onClick={() => exp('belanja')}>{busy === 'belanja' ? '…' : 'Ekspor Belanja'}</button>
+      </div>
+
+      <h3 className="rekap-h" style={{ marginTop: 22 }}>Sinkronkan ke Spreadsheet</h3>
+      <p className="rekap-sub">Tulis ulang Google Spreadsheet agar <b>sama persis</b> dengan data app saat ini (membersihkan baris lama yang tidak terpakai). Data app tetap di Firebase; ini hanya menyegarkan cermin Sheets untuk akuntan.</p>
+      <div className="actions">
+        <button className="btn" disabled={syncing} onClick={resync}>{syncing ? 'Menyinkronkan…' : '🔄 Sinkronkan ke Spreadsheet'}</button>
       </div>
     </div>
   )
