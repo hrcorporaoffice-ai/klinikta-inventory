@@ -6,7 +6,7 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{-webkit-text-size-adjust:100%}
-body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.4}
+body{font-family:var(--font,-apple-system,'Segoe UI',Roboto,Arial,sans-serif);background:var(--bg);color:var(--ink);font-size:15px;line-height:1.4}
 button{font-family:inherit}
 .wrap{max-width:1100px;margin:0 auto;padding:0 14px 96px}
 
@@ -14,7 +14,8 @@ button{font-family:inherit}
 header{background:var(--navy);color:#fff;padding:14px 16px;border-radius:0 0 14px 14px;position:sticky;top:0;z-index:20}
 .hrow{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.3px}
-.brand .dot{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--blue),var(--red));display:grid;place-items:center;font-size:13px}
+.brand .dot{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--blue),var(--red));display:grid;place-items:center;font-size:13px;overflow:hidden}
+.brand-logo-img{width:100%;height:100%;object-fit:cover;display:block}
 .brand small{display:block;font-weight:400;font-size:11px;opacity:.8;letter-spacing:0}
 .period{background:rgba(255,255,255,.14);padding:6px 10px;border-radius:8px;font-size:13px}
 .huser{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
@@ -27,7 +28,9 @@ header{background:var(--navy);color:#fff;padding:14px 16px;border-radius:0 0 14p
 .login-card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:32px 28px 28px;box-shadow:0 16px 52px rgba(41,81,127,.13);width:100%;max-width:360px}
 /* Brand row: logo icon kiri + teks kanan — sama persis seperti absensi */
 .login-brand-row{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:14px}
-.login-logo{width:58px;height:58px;border-radius:16px;background:var(--navy);flex-shrink:0;display:grid;place-items:center;box-shadow:0 6px 18px rgba(41,81,127,.28)}
+.login-logo{width:58px;height:58px;border-radius:16px;background:var(--navy);flex-shrink:0;display:grid;place-items:center;box-shadow:0 6px 18px rgba(41,81,127,.28);overflow:hidden}
+.login-logo.has-img{background:#fff}
+.login-logo .brand-logo-img{border-radius:16px}
 .login-brand-text{text-align:left}
 .login-title{font-size:24px;font-weight:800;color:var(--navy);letter-spacing:.3px;line-height:1.1}
 .login-tagline{font-size:11px;color:var(--muted);letter-spacing:.5px;margin-top:1px}
@@ -235,6 +238,15 @@ td.num{text-align:center}
 .multisel-check.on::after{content:'✓';color:#fff;font-size:12px;font-weight:700;line-height:1}
 /* Faktur: pilihan kamera atau galeri */
 .faktur-pick{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* Panel Tampilan (brand) */
+.brand-logo-row{display:flex;align-items:center;gap:16px;padding:6px 0 16px}
+.brand-logo-prev{width:64px;height:64px;border-radius:14px;border:1.5px solid var(--line);background:var(--soft);display:grid;place-items:center;overflow:hidden;flex-shrink:0}
+.brand-logo-prev img{width:100%;height:100%;object-fit:cover}
+.brand-logo-empty{font-size:28px}
+.brand-logo-actions .actions{display:flex;gap:8px;margin-top:2px}
+.color-pick{display:flex;align-items:center;gap:8px}
+.color-pick input[type=color]{width:46px;height:40px;padding:3px;border:1.5px solid var(--line);border-radius:9px;background:#fff;cursor:pointer;flex-shrink:0}
+.color-pick .hex{flex:1;min-width:0;text-transform:uppercase}
 .admin-list{display:flex;flex-direction:column}
 .admin-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f4f6f9;font-size:14px}
 .admin-row.off{opacity:.5}

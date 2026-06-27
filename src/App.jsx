@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { MASTER_ITEMS, KELOMPOK } from './data/masterItems.js'
 import * as api from './api.js'
+import { BRAND_DEFAULT, applyTheme } from './brand.js'
 import Belanja from './components/Belanja.jsx'
 import Rekap from './components/Rekap.jsx'
 import Admin from './components/Admin.jsx'
@@ -35,18 +36,33 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('inv_user') || 'null') } catch { return null }
   })
 
+  // Brand/tema: pakai cache lokal seketika (hindari kedip), lalu segarkan dari RTDB.
+  const [brand, setBrand] = useState(() => {
+    try { const c = JSON.parse(localStorage.getItem('inv_brand') || 'null'); return c ? { ...BRAND_DEFAULT, ...c } : BRAND_DEFAULT } catch { return BRAND_DEFAULT }
+  })
+  useEffect(() => { applyTheme(brand) }, []) // terapkan cache saat mount
+  const loadBrand = useCallback(() => {
+    api.getBrand().then((b) => {
+      setBrand(b); applyTheme(b)
+      localStorage.setItem('inv_brand', JSON.stringify(b))
+    }).catch(() => {})
+  }, [])
+  useEffect(() => { loadBrand() }, [loadBrand])
+
   if (!user) {
-    return <Login onLogin={(u) => { localStorage.setItem('inv_user', JSON.stringify(u)); setUser(u) }} />
+    return <Login brand={brand} onLogin={(u) => { localStorage.setItem('inv_user', JSON.stringify(u)); setUser(u) }} />
   }
   return (
     <InventoryApp
       user={user}
+      brand={brand}
+      reloadBrand={loadBrand}
       onLogout={() => { localStorage.removeItem('inv_user'); setUser(null) }}
     />
   )
 }
 
-function InventoryApp({ user, onLogout }) {
+function InventoryApp({ user, brand, reloadBrand, onLogout }) {
   const { tanggal: today, lengkap, periode } = useMemo(todayParts, [])
 
   const [group, setGroup] = useState('BHP Gigi')
@@ -189,8 +205,8 @@ function InventoryApp({ user, onLogout }) {
       <header>
         <div className="hrow">
           <div className="brand">
-            <span className="dot">📦</span>
-            <div>KLINIKTA Inventory<small>Stok BHP &amp; Obat</small></div>
+            <span className="dot">{brand.logo ? <img src={brand.logo} alt="" className="brand-logo-img" /> : '📦'}</span>
+            <div>{brand.title} Inventory<small>{brand.subtitle}</small></div>
           </div>
           <div className="huser">
             <span className="period">{periode}</span>
@@ -275,7 +291,7 @@ function InventoryApp({ user, onLogout }) {
         ) : mode === 'belanja' ? (
           <Belanja user={user} today={today} onToast={showToast} onChanged={load} />
         ) : mode === 'admin' ? (
-          <Admin user={user} onToast={showToast} />
+          <Admin user={user} onToast={showToast} onBrandSaved={reloadBrand} />
         ) : (
           <Rekap today={today} onToast={showToast} />
         )}
@@ -302,7 +318,7 @@ function InventoryApp({ user, onLogout }) {
 
 // ---------------- Login (pemilih staf + PIN ringan) ----------------
 
-function Login({ onLogin }) {
+function Login({ brand = BRAND_DEFAULT, onLogin }) {
   const [users, setUsers] = useState(null)
   const [nama, setNama] = useState('')
   const [pin, setPin] = useState('')
@@ -355,21 +371,25 @@ function Login({ onLogin }) {
 
         {/* Brand row: logo + nama klinik (horizontal, persis seperti absensi) */}
         <div className="login-brand-row">
-          <div className="login-logo">
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-              <path d="M16 3L29 10v12L16 29 3 22V10L16 3z" fill="rgba(255,255,255,.18)" stroke="white" strokeWidth="1.8" strokeLinejoin="round"/>
-              <path d="M3 10l13 7.5L29 10M16 17.5V29" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
-              <line x1="16" y1="11" x2="16" y2="20" stroke="white" strokeWidth="1.4"/>
-              <line x1="12" y1="15.5" x2="20" y2="15.5" stroke="white" strokeWidth="1.4"/>
-            </svg>
+          <div className={'login-logo' + (brand.logo ? ' has-img' : '')}>
+            {brand.logo ? (
+              <img src={brand.logo} alt="logo" className="brand-logo-img" />
+            ) : (
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                <path d="M16 3L29 10v12L16 29 3 22V10L16 3z" fill="rgba(255,255,255,.18)" stroke="white" strokeWidth="1.8" strokeLinejoin="round"/>
+                <path d="M3 10l13 7.5L29 10M16 17.5V29" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
+                <line x1="16" y1="11" x2="16" y2="20" stroke="white" strokeWidth="1.4"/>
+                <line x1="12" y1="15.5" x2="20" y2="15.5" stroke="white" strokeWidth="1.4"/>
+              </svg>
+            )}
           </div>
           <div className="login-brand-text">
-            <div className="login-title">KLINIKTA</div>
-            <div className="login-tagline">KLINIK KITA SEMUA</div>
+            <div className="login-title">{brand.title}</div>
+            <div className="login-tagline">{brand.tagline}</div>
           </div>
         </div>
 
-        <div className="login-module">Inventory · Stok BHP &amp; Obat</div>
+        <div className="login-module">Inventory · {brand.subtitle}</div>
 
         <select className="login-input login-select" value={nama} onChange={(e) => setNama(e.target.value)} autoFocus={!nama}>
           <option value="">— Pilih nama kamu —</option>

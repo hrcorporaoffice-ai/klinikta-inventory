@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import * as api from '../api.js'
+import { BRAND_DEFAULT, FONTS, applyTheme } from '../brand.js'
 
 const KELOMPOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes']
 const PERAN = ['logistik', 'bendahara', 'penerima', 'admin']
@@ -9,10 +10,11 @@ const SECTIONS = [
   ['master', 'Item Master'],
   ['staf', 'Staf & PIN'],
   ['kw', 'Kata Kunci Klasifikasi'],
+  ['tampilan', 'Tampilan'],
   ['ekspor', 'Ekspor'],
 ]
 
-export default function Admin({ user, onToast }) {
+export default function Admin({ user, onToast, onBrandSaved }) {
   const [sec, setSec] = useState('master')
   return (
     <div className="card">
@@ -26,7 +28,94 @@ export default function Admin({ user, onToast }) {
         {sec === 'master' && <MasterAdmin user={user} onToast={onToast} />}
         {sec === 'staf' && <StafAdmin user={user} onToast={onToast} />}
         {sec === 'kw' && <KeywordAdmin user={user} onToast={onToast} />}
+        {sec === 'tampilan' && <BrandPanel user={user} onToast={onToast} onSaved={onBrandSaved} />}
         {sec === 'ekspor' && <Ekspor onToast={onToast} />}
+      </div>
+    </div>
+  )
+}
+
+// ---------------- Tampilan (brand: logo, warna, font) ----------------
+function BrandPanel({ user, onToast, onSaved }) {
+  const [brand, setBrand] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const fileRef = useRef(null)
+
+  useEffect(() => { api.getBrand().then(setBrand).catch((e) => onToast('err', e.message)) }, [])
+
+  if (!brand) return <div className="state"><span className="spin" />Memuat…</div>
+
+  // Ubah + pratinjau langsung (warna/font terlihat seketika di seluruh app).
+  const change = (patch) => { const next = { ...brand, ...patch }; setBrand(next); applyTheme(next) }
+
+  function onLogoFile(file) {
+    if (!file) return
+    if (file.size > 500 * 1024) { onToast('err', 'Logo terlalu besar (maks ~500KB). Kompres dulu.'); return }
+    const r = new FileReader()
+    r.onload = () => change({ logo: String(r.result) })
+    r.readAsDataURL(file)
+  }
+  async function save() {
+    setBusy(true)
+    try {
+      await api.saveBrand({ user: user.nama, brand })
+      onToast('ok', 'Tampilan disimpan.')
+      onSaved && onSaved()
+    } catch (e) { onToast('err', e.message) } finally { setBusy(false) }
+  }
+  function resetDefault() {
+    const d = { ...BRAND_DEFAULT }
+    setBrand(d); applyTheme(d)
+  }
+
+  const hasLogo = !!brand.logo
+  return (
+    <div className="admin-form">
+      <p className="rekap-sub">Atur logo, warna, dan font aplikasi. Perubahan tampil langsung sebagai pratinjau; klik <b>Simpan</b> agar berlaku untuk semua perangkat.</p>
+
+      {/* Logo */}
+      <div className="brand-logo-row">
+        <div className="brand-logo-prev">
+          {hasLogo ? <img src={brand.logo} alt="logo" /> : <span className="brand-logo-empty">📦</span>}
+        </div>
+        <div className="brand-logo-actions">
+          <div className="bform-label">Logo</div>
+          <div className="actions">
+            <button className="btn ghost sm" onClick={() => fileRef.current?.click()}>{hasLogo ? 'Ganti Logo' : 'Unggah Logo'}</button>
+            {hasLogo && <button className="btn ghost sm" onClick={() => change({ logo: '' })}>Hapus</button>}
+          </div>
+          <div className="muted sm" style={{ marginTop: 4 }}>PNG/JPG, maks ~500KB. Kosong = ikon bawaan.</div>
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => onLogoFile(e.target.files[0])} />
+        </div>
+      </div>
+
+      {/* Teks brand */}
+      <div className="bform">
+        <label>Nama Aplikasi<input value={brand.title} onChange={(e) => change({ title: e.target.value })} /></label>
+        <label>Tagline<input value={brand.tagline} onChange={(e) => change({ tagline: e.target.value })} /></label>
+        <label>Subjudul<input value={brand.subtitle} onChange={(e) => change({ subtitle: e.target.value })} /></label>
+        <label>Font
+          <select value={brand.font} onChange={(e) => change({ font: e.target.value })}>
+            {Object.entries(FONTS).map(([id, f]) => <option key={id} value={id}>{f.label}</option>)}
+          </select>
+        </label>
+        <label>Warna Utama
+          <div className="color-pick">
+            <input type="color" value={brand.colorPrimary} onChange={(e) => change({ colorPrimary: e.target.value })} />
+            <input className="hex" value={brand.colorPrimary} onChange={(e) => change({ colorPrimary: e.target.value })} />
+          </div>
+        </label>
+        <label>Warna Aksen
+          <div className="color-pick">
+            <input type="color" value={brand.colorAccent} onChange={(e) => change({ colorAccent: e.target.value })} />
+            <input className="hex" value={brand.colorAccent} onChange={(e) => change({ colorAccent: e.target.value })} />
+          </div>
+        </label>
+      </div>
+
+      <div className="bsave">
+        <button className="btn ghost" onClick={resetDefault}>Reset ke Bawaan</button>
+        <button className="btn" disabled={busy} onClick={save}>{busy ? 'Menyimpan…' : 'Simpan'}</button>
       </div>
     </div>
   )

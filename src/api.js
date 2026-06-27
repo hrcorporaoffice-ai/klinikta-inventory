@@ -7,6 +7,7 @@
 import {
   rdbGet, rdbSet, rdbUpdate, rdbRemove, rdbPush, valuesOf,
 } from './firebase.js'
+import { BRAND_DEFAULT } from './brand.js'
 
 // GAS hanya dipakai untuk upload file ke Drive (bukan lagi sebagai database).
 const GAS_URL = import.meta.env.VITE_GAS_URL || ''
@@ -594,4 +595,32 @@ export async function deleteKeyword({ user, klasifikasi, keyword }) {
   if (!key) return { deleted: false }
   await rdbRemove('klasifikasi_kw/' + key)
   return { deleted: true }
+}
+
+// ---------------------------------------------------------------------------
+// BRAND / TAMPILAN — logo, warna, font (logo data URL disimpan terpisah)
+// ---------------------------------------------------------------------------
+export async function getBrand() {
+  const b = (await rdbGet('brand')) || {}
+  let logo = ''
+  if (b.logo === '__custom__') logo = (await rdbGet('brandLogo')) || ''
+  return { ...BRAND_DEFAULT, ...b, logo }
+}
+
+export async function saveBrand({ user, brand }) {
+  await requireAdmin(user)
+  const { logo, ...rest } = brand || {}
+  if (logo && String(logo).startsWith('data:')) {
+    // Logo baru diunggah → simpan data URL terpisah, tandai '__custom__'.
+    await rdbSet('brandLogo', logo)
+    await rdbSet('brand', { ...rest, logo: '__custom__' })
+  } else if (logo === '__custom__') {
+    // Logo tidak diubah (tetap kustom yang lama).
+    await rdbSet('brand', { ...rest, logo: '__custom__' })
+  } else {
+    // Tidak ada logo / dihapus → kembali ke ikon bawaan.
+    await rdbRemove('brandLogo')
+    await rdbSet('brand', { ...rest, logo: '' })
+  }
+  return { ok: true }
 }
