@@ -133,7 +133,7 @@ export default function Belanja({ user, today, onToast, onChanged }) {
 
         <div className="btotals">
           <div className="bt-line"><span>Subtotal Produk</span><b>{rupiah(calc.sumSub)}</b></div>
-          <div className="bt-line"><span>Biaya Bersih (Kirim/Diskon/Voucher/Layanan)</span><b>{calc.net >= 0 ? '' : '− '}{rupiah(Math.abs(calc.net))}</b></div>
+          <div className="bt-line"><span>Biaya Bersih</span><b>{calc.net >= 0 ? '' : '− '}{rupiah(Math.abs(calc.net))}</b></div>
           <div className="bt-line total"><span>Total Bayar</span><b>{rupiah(calc.total)}</b></div>
         </div>
         <div className="bsave">
