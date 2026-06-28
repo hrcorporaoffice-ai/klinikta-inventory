@@ -222,6 +222,7 @@ function doPost(e) {
         case 'mirror_belanja': rm = mirrorBelanja_(body.nota, body.items); break;
         case 'mirror_antrian': rm = mirrorUpsert_(SHEETS.antrianAset, 'idAset', body.rows); break;
         case 'mirror_master':  rm = { written: clearAndWrite_(SHEETS.master, body.rows) }; break;
+        case 'mirror_full':    rm = { written: mirrorFull_(body.sheet, body.rows) }; break;
         default: return json_({ ok: false, error: 'Mirror tak dikenal: ' + action });
       }
       return json_({ ok: true, data: rm });
@@ -760,6 +761,13 @@ function resyncSheets_(body) {
       keywords:    clearAndWrite_(SHEETS.klasifikasiKw, d.keywords),
     },
   };
+}
+
+// Tulis ulang penuh satu sheet (whitelist) — dipakai mirror_full setelah edit/hapus admin.
+function mirrorFull_(sheetName, rows) {
+  var allowed = { 'transaksi_pakai': 1, 'opname': 1, 'master_item': 1 };
+  if (!allowed[sheetName]) throw new Error('Sheet tidak diizinkan: ' + sheetName);
+  return clearAndWrite_(sheetName, rows);
 }
 
 function clearAndWrite_(sheetName, rows) {

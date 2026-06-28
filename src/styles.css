@@ -255,6 +255,16 @@ td.num{text-align:center}
 .log-head{font-size:14px}
 .log-aksi{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:20px;background:var(--soft);color:var(--navy);font-size:12px;font-weight:600}
 .log-time{font-size:11.5px;color:var(--muted);margin-top:2px}
+/* Kelola data pemakaian & opname (admin, di Rekap) */
+.kelola{margin-top:18px;border-top:1px dashed var(--line);padding-top:14px}
+.kelola-sub{font-weight:700;color:var(--navy);font-size:14px;margin-bottom:6px}
+.kelola-list{display:flex;flex-direction:column}
+.kelola-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #f1f4f8;flex-wrap:wrap}
+.kelola-info{display:flex;flex-direction:column;min-width:0}
+.kelola-act{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.kelola-num{width:72px;padding:7px 8px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;text-align:center;outline:none}
+.kelola-num:focus{border-color:var(--blue)}
+.btn.danger.sm{padding:7px 12px;font-size:13px}
 .admin-list{display:flex;flex-direction:column}
 .admin-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f4f6f9;font-size:14px}
 .admin-row.off{opacity:.5}

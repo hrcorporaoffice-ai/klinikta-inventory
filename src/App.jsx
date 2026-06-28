@@ -193,10 +193,15 @@ function InventoryApp({ user, brand, reloadBrand, onLogout }) {
     }
   }
 
-  const isAdmin = String(user.peran || '').split(',').map((r) => r.trim()).includes('admin')
+  const roles = String(user.peran || '').split(',').map((r) => r.trim())
+  const isAdmin = roles.includes('admin')
+  const canRekap = isAdmin || roles.includes('bendahara') // Rekap LAPKEU: hanya bendahara & admin
+  const baseModes = MODES.filter((m) => m.id !== 'rekap' || canRekap)
   const modes = isAdmin
-    ? [...MODES, { id: 'admin', label: 'Admin', sub: 'Kelola data & staf', chip: 'r' }]
-    : MODES
+    ? [...baseModes, { id: 'admin', label: 'Admin', sub: 'Kelola data & staf', chip: 'r' }]
+    : baseModes
+  // Jika mode aktif tak boleh diakses peran ini, kembalikan ke Pemakaian.
+  useEffect(() => { if (!modes.some((m) => m.id === mode)) setMode('pakai') }, [mode, canRekap, isAdmin])
   const modeMeta = modes.find((m) => m.id === mode) || MODES[0]
   const isGrid = GRID_MODES.includes(mode)
 
@@ -292,9 +297,9 @@ function InventoryApp({ user, brand, reloadBrand, onLogout }) {
           <Belanja user={user} today={today} onToast={showToast} onChanged={load} />
         ) : mode === 'admin' ? (
           <Admin user={user} onToast={showToast} onBrandSaved={reloadBrand} />
-        ) : (
-          <Rekap today={today} onToast={showToast} />
-        )}
+        ) : mode === 'rekap' && canRekap ? (
+          <Rekap user={user} today={today} onToast={showToast} />
+        ) : null}
       </div>
 
       {/* Sticky save — hanya untuk mode grid (Pemakaian/Opname) */}

@@ -3,11 +3,12 @@ import * as api from '../api.js'
 
 const rupiah = (n) => 'Rp ' + new Intl.NumberFormat('id-ID').format(Math.round(n || 0))
 
-export default function Rekap({ today, onToast }) {
+export default function Rekap({ user, today, onToast }) {
   const [periode, setPeriode] = useState(today.slice(0, 7)) // YYYY-MM
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const isAdmin = String(user?.peran || '').split(',').map((r) => r.trim()).includes('admin')
 
   const load = useCallback(() => {
     setLoading(true); setError('')
@@ -95,8 +96,98 @@ export default function Rekap({ today, onToast }) {
               <div className="muted" style={{ marginTop: 6 }}>Selisih negatif = stok fisik kurang dari sistem (kemungkinan kebocoran/salah catat).</div>
             </div>
           )}
+
+          {isAdmin && <KelolaData user={user} periode={periode} onToast={onToast} onChanged={load} />}
         </div>
       )}
+    </div>
+  )
+}
+
+// ---------------- Kelola data pemakaian & opname (admin) ----------------
+function KelolaData({ user, periode, onToast, onChanged }) {
+  const [pakai, setPakai] = useState(null)
+  const [opname, setOpname] = useState(null)
+  const [busy, setBusy] = useState('')
+
+  const load = useCallback(() => {
+    api.getPakaiRecords(periode).then(setPakai).catch((e) => onToast('err', e.message))
+    api.getOpnameRecords(periode).then(setOpname).catch((e) => onToast('err', e.message))
+  }, [periode])
+  useEffect(() => { load() }, [load])
+
+  const afterChange = () => { load(); onChanged && onChanged() }
+
+  async function savePakai(r, val) {
+    setBusy(r.id)
+    try { await api.updatePakai({ user: user.nama, id: r.id, jumlah: val }); onToast('ok', 'Pemakaian diperbarui.'); afterChange() }
+    catch (e) { onToast('err', e.message) } finally { setBusy('') }
+  }
+  async function delPakai(r) {
+    if (!window.confirm(`Hapus pemakaian "${r.nama}" (${r.jumlah}) tgl ${r.tanggal}?`)) return
+    setBusy(r.id)
+    try { await api.deletePakai({ user: user.nama, id: r.id }); onToast('ok', 'Pemakaian dihapus.'); afterChange() }
+    catch (e) { onToast('err', e.message) } finally { setBusy('') }
+  }
+  async function saveOpname(r, val) {
+    setBusy(r.id)
+    try { await api.updateOpname({ user: user.nama, id: r.id, stokFisik: val }); onToast('ok', 'Opname diperbarui.'); afterChange() }
+    catch (e) { onToast('err', e.message) } finally { setBusy('') }
+  }
+  async function delOpname(r) {
+    if (!window.confirm(`Hapus opname "${r.nama}" tgl ${r.tanggal}?`)) return
+    setBusy(r.id)
+    try { await api.deleteOpname({ user: user.nama, id: r.id }); onToast('ok', 'Opname dihapus.'); afterChange() }
+    catch (e) { onToast('err', e.message) } finally { setBusy('') }
+  }
+
+  return (
+    <div className="kelola">
+      <h3 className="rekap-h">⚙️ Kelola Data (Admin) · {periode}</h3>
+      <p className="rekap-sub">Perbaiki salah input atau hapus data pemakaian/opname pada periode ini. Stok & rekap dihitung ulang otomatis.</p>
+
+      <div className="kelola-sub">Pemakaian</div>
+      {pakai === null ? <div className="muted sm">Memuat…</div> : pakai.length === 0 ? <div className="muted sm">Tidak ada pemakaian di periode ini.</div> : (
+        <div className="kelola-list">
+          {pakai.map((r) => <PakaiEditRow key={r.id} r={r} busy={busy === r.id} onSave={savePakai} onDelete={delPakai} />)}
+        </div>
+      )}
+
+      <div className="kelola-sub" style={{ marginTop: 14 }}>Opname</div>
+      {opname === null ? <div className="muted sm">Memuat…</div> : opname.length === 0 ? <div className="muted sm">Tidak ada opname di periode ini.</div> : (
+        <div className="kelola-list">
+          {opname.map((r) => <OpnameEditRow key={r.id} r={r} busy={busy === r.id} onSave={saveOpname} onDelete={delOpname} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PakaiEditRow({ r, busy, onSave, onDelete }) {
+  const [val, setVal] = useState(r.jumlah)
+  return (
+    <div className="kelola-row">
+      <div className="kelola-info"><b>{r.nama}</b><span className="muted sm">{r.tanggal} · {r.kelompok} · {r.user || '-'}</span></div>
+      <div className="kelola-act">
+        <input className="kelola-num" type="number" min="0" value={val} onChange={(e) => setVal(e.target.value)} />
+        <button className="btn ghost sm" disabled={busy || String(val) === String(r.jumlah)} onClick={() => onSave(r, val)}>Simpan</button>
+        <button className="btn danger sm" disabled={busy} onClick={() => onDelete(r)}>Hapus</button>
+      </div>
+    </div>
+  )
+}
+
+function OpnameEditRow({ r, busy, onSave, onDelete }) {
+  const [val, setVal] = useState(r.stokFisik)
+  const selisih = Number(val || 0) - r.stokSistem
+  return (
+    <div className="kelola-row">
+      <div className="kelola-info"><b>{r.nama}</b><span className="muted sm">{r.tanggal} · sistem {r.stokSistem} · selisih {selisih > 0 ? '+' : ''}{selisih} · {r.user || '-'}</span></div>
+      <div className="kelola-act">
+        <input className="kelola-num" type="number" value={val} onChange={(e) => setVal(e.target.value)} />
+        <button className="btn ghost sm" disabled={busy || String(val) === String(r.stokFisik)} onClick={() => onSave(r, val)}>Simpan</button>
+        <button className="btn danger sm" disabled={busy} onClick={() => onDelete(r)}>Hapus</button>
+      </div>
     </div>
   )
 }

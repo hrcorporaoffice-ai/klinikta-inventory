@@ -126,6 +126,27 @@ async function mirrorMasterFull() {
   } catch (e) { /* abaikan */ }
 }
 
+// Tulis ulang sheet transaksi_pakai / opname dari RTDB (setelah edit/hapus admin).
+async function mirrorPakaiFull() {
+  try {
+    const rows = valuesOf(await rdbGet('pakai')).map((r) => ({
+      timestamp: r.ts ? new Date(r.ts).toISOString() : '', tanggal: fmtDate(r.tanggal), kelompok: r.kelompok,
+      kode: r.kode, nama: r.nama, jumlah: num(r.jumlah), user: r.user || '', catatan: r.catatan || '',
+    }))
+    mirror('mirror_full', { sheet: 'transaksi_pakai', rows })
+  } catch (e) { /* abaikan */ }
+}
+async function mirrorOpnameFull() {
+  try {
+    const rows = valuesOf(await rdbGet('opname')).map((r) => ({
+      timestamp: r.ts ? new Date(r.ts).toISOString() : '', tanggal: fmtDate(r.tanggal), kelompok: r.kelompok,
+      kode: r.kode, nama: r.nama, stokSistem: num(r.stokSistem), stokFisik: num(r.stokFisik),
+      selisih: num(r.selisih), user: r.user || '', catatan: r.catatan || '',
+    }))
+    mirror('mirror_full', { sheet: 'opname', rows })
+  } catch (e) { /* abaikan */ }
+}
+
 // ---------------------------------------------------------------------------
 // Pembaca dasar
 // ---------------------------------------------------------------------------
@@ -562,6 +583,64 @@ export async function getActivity({ limit = 300 } = {}) {
   return arr.slice(0, limit).map((a) => ({
     ts: num(a.ts), tanggal: a.tanggal || '', user: a.user || '-', aksi: a.aksi || '', detail: a.detail || '',
   }))
+}
+
+// ---------------------------------------------------------------------------
+// KELOLA PEMAKAIAN & OPNAME (admin — dari menu Rekap LAPKEU)
+// ---------------------------------------------------------------------------
+// Catatan key: setiap record punya id (push key RTDB) agar bisa diedit/dihapus.
+export async function getPakaiRecords(periode) {
+  const obj = (await rdbGet('pakai')) || {}
+  return Object.entries(obj)
+    .map(([id, r]) => ({ id, tanggal: fmtDate(r.tanggal), kode: r.kode, nama: r.nama, kelompok: r.kelompok, jumlah: num(r.jumlah), user: r.user || '' }))
+    .filter((r) => !periode || r.tanggal.slice(0, 7) === periode)
+    .sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1))
+}
+
+export async function getOpnameRecords(periode) {
+  const obj = (await rdbGet('opname')) || {}
+  return Object.entries(obj)
+    .map(([id, r]) => ({ id, tanggal: fmtDate(r.tanggal), kode: r.kode, nama: r.nama, kelompok: r.kelompok, stokSistem: num(r.stokSistem), stokFisik: num(r.stokFisik), selisih: num(r.selisih), user: r.user || '' }))
+    .filter((r) => !periode || r.tanggal.slice(0, 7) === periode)
+    .sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1))
+}
+
+export async function updatePakai({ user, id, jumlah }) {
+  await requireAdmin(user)
+  const r = await rdbGet('pakai/' + id)
+  if (!r) throw new Error('Data pemakaian tidak ditemukan.')
+  await rdbUpdate('pakai/' + id, { jumlah: num(jumlah) })
+  mirrorPakaiFull()
+  logActivity(user, 'Edit Pemakaian', `${r.nama}: ${num(r.jumlah)} → ${num(jumlah)}`)
+  return { ok: true }
+}
+export async function deletePakai({ user, id }) {
+  await requireAdmin(user)
+  const r = await rdbGet('pakai/' + id)
+  if (!r) throw new Error('Data pemakaian tidak ditemukan.')
+  await rdbRemove('pakai/' + id)
+  mirrorPakaiFull()
+  logActivity(user, 'Hapus Pemakaian', `${r.nama} (${num(r.jumlah)}) ${fmtDate(r.tanggal)}`)
+  return { ok: true }
+}
+export async function updateOpname({ user, id, stokFisik }) {
+  await requireAdmin(user)
+  const r = await rdbGet('opname/' + id)
+  if (!r) throw new Error('Data opname tidak ditemukan.')
+  const fisik = num(stokFisik)
+  await rdbUpdate('opname/' + id, { stokFisik: fisik, selisih: fisik - num(r.stokSistem) })
+  mirrorOpnameFull()
+  logActivity(user, 'Edit Opname', `${r.nama}: fisik → ${fisik}`)
+  return { ok: true }
+}
+export async function deleteOpname({ user, id }) {
+  await requireAdmin(user)
+  const r = await rdbGet('opname/' + id)
+  if (!r) throw new Error('Data opname tidak ditemukan.')
+  await rdbRemove('opname/' + id)
+  mirrorOpnameFull()
+  logActivity(user, 'Hapus Opname', `${r.nama} ${fmtDate(r.tanggal)}`)
+  return { ok: true }
 }
 
 // ---------------------------------------------------------------------------
