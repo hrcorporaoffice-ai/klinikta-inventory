@@ -221,6 +221,7 @@ function doPost(e) {
         case 'mirror_opname':  rm = mirrorAppend_(SHEETS.opname, body.rows); break;
         case 'mirror_belanja': rm = mirrorBelanja_(body.nota, body.items); break;
         case 'mirror_antrian': rm = mirrorUpsert_(SHEETS.antrianAset, 'idAset', body.rows); break;
+        case 'mirror_master':  rm = { written: clearAndWrite_(SHEETS.master, body.rows) }; break;
         default: return json_({ ok: false, error: 'Mirror tak dikenal: ' + action });
       }
       return json_({ ok: true, data: rm });

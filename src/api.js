@@ -105,6 +105,27 @@ const antrianToSheet = (a) => ({
   sumber: a.sumber || '', kategori: a.kategori || 'Aset', statusCatat: a.statusCatat || 'Belum dicatat',
 })
 
+// Catat aktivitas akun (untuk panel Log Aktivitas admin). Best-effort.
+async function logActivity(user, aksi, detail) {
+  try { await rdbPush('aktivitas', { ts: Date.now(), tanggal: todayStr(), user: user || '-', aksi, detail: detail || '' }) }
+  catch (e) { /* abaikan: log tak boleh menggagalkan aksi utama */ }
+}
+
+// Sinkronkan seluruh master ke sheet master_item (dipanggil setelah perubahan master).
+async function mirrorMasterFull() {
+  try {
+    const masterObj = (await rdbGet('master')) || {}
+    const rows = Object.values(masterObj).map((m) => ({
+      kode: m.kode, nama: m.nama, kelompok: m.kelompok, kategoriProduk: m.kategoriProduk || m.kelompok,
+      subKategori: m.subKategori || '', satuan: m.satuan || '', kemasan: m.kemasan || '',
+      hargaAcuan: num(m.hargaAcuan), kategoriDefault: m.kategoriDefault || '', metode: m.metode || 'Praktis',
+      titikReorder: (m.titikReorder === '' || m.titikReorder == null) ? '' : num(m.titikReorder),
+      aktif: !(m.aktif === false || String(m.aktif) === 'false'),
+    }))
+    mirror('mirror_master', { rows })
+  } catch (e) { /* abaikan */ }
+}
+
 // ---------------------------------------------------------------------------
 // Pembaca dasar
 // ---------------------------------------------------------------------------
@@ -324,6 +345,7 @@ export async function savePakai({ tanggal, user, lines }) {
   }
   if (!rows.length) throw new Error('Tidak ada baris valid (semua kosong/nol).')
   mirror('mirror_pakai', { rows })
+  logActivity(user, 'Pemakaian', `${rows.length} item dipakai`)
   return { tersimpan: rows.length, tanggal: tgl }
 }
 
@@ -343,6 +365,7 @@ export async function saveOpname({ kelompok, tanggal, user, lines }) {
   }
   if (!rows.length) throw new Error('Tidak ada baris valid (semua kosong/nol).')
   mirror('mirror_opname', { rows })
+  logActivity(user, 'Stok Opname', `${rows.length} item dihitung`)
   return { tersimpan: rows.length, tanggal: tgl }
 }
 
@@ -392,6 +415,7 @@ export async function saveBelanja({ nota = {}, items = [], user }) {
   }
   await rdbSet('belanja/' + id, notaObj)
   mirror('mirror_belanja', belanjaToSheet(notaObj))
+  logActivity(user, 'Belanja baru', `${nota.sumber || 'tanpa sumber'} · ${baris} item · Rp${totalNota}`)
   return { idBelanja: id, totalNota, items: baris, status: 'Dipesan' }
 }
 
@@ -415,6 +439,7 @@ export async function updateBelanjaStatus({ idBelanja, status, user, noVA, tangg
   }
   const fresh = await rdbGet('belanja/' + idBelanja)
   if (fresh) mirror('mirror_belanja', belanjaToSheet(fresh))
+  logActivity(user, 'Belanja → ' + status, (fresh && fresh.sumber) || idBelanja)
   return { idBelanja, status }
 }
 
@@ -452,6 +477,9 @@ export async function finalizeBelanja({ idBelanja, mappings = [], fakturUrl, use
   const asetRows = valuesOf(await rdbGet('antrian_aset')).filter((a) => a.idBelanja === idBelanja).map(antrianToSheet)
   if (asetRows.length) mirror('mirror_antrian', { rows: asetRows })
 
+  // Item master baru mungkin dibuat saat finalisasi → sinkron master ke sheet.
+  if (mappings.some((mp) => mp.newItem && mp.newItem.nama)) mirrorMasterFull()
+  logActivity(user, 'Belanja → Masuk Stok', (fresh && fresh.sumber) || idBelanja)
   return { idBelanja, status: 'Masuk Stok' }
 }
 
@@ -494,6 +522,7 @@ async function createMasterItem(kelompok, d) {
     kategoriDefault: defaultKategori(kelompok), metode: d.metode || 'Praktis',
     titikReorder: (d.titikReorder === '' || d.titikReorder == null) ? '' : num(d.titikReorder), aktif: true,
   })
+  mirrorMasterFull()
   return kode
 }
 
@@ -526,6 +555,15 @@ export async function updateAntrianAset({ idAset, statusCatat }) {
   return { idAset, statusCatat: val }
 }
 
+// Log aktivitas untuk panel admin (terbaru dulu).
+export async function getActivity({ limit = 300 } = {}) {
+  const arr = valuesOf(await rdbGet('aktivitas'))
+  arr.sort((a, b) => num(b.ts) - num(a.ts))
+  return arr.slice(0, limit).map((a) => ({
+    ts: num(a.ts), tanggal: a.tanggal || '', user: a.user || '-', aksi: a.aksi || '', detail: a.detail || '',
+  }))
+}
+
 // ---------------------------------------------------------------------------
 // AUTH
 // ---------------------------------------------------------------------------
@@ -553,10 +591,25 @@ export async function saveMaster({ user, item = {} }) {
       titikReorder: (item.titikReorder === '' || item.titikReorder == null) ? '' : num(item.titikReorder),
       aktif: item.aktif !== false,
     })
+    mirrorMasterFull()
+    logActivity(user, 'Edit Master', item.kode + ' ' + item.nama)
     return { kode: item.kode, updated: true }
   }
   const kode = await createMasterItem(item.kelompok, item)
+  logActivity(user, 'Tambah Master', kode + ' ' + item.nama)
   return { kode, created: true }
+}
+
+// Hapus item master. Riwayat transaksi lama yang merujuk kode ini tetap tersimpan.
+export async function deleteMaster({ user, kode }) {
+  await requireAdmin(user)
+  if (!kode) throw new Error('Kode wajib.')
+  const ex = await rdbGet('master/' + kode)
+  if (!ex) throw new Error('Item tidak ditemukan: ' + kode)
+  await rdbRemove('master/' + kode)
+  mirrorMasterFull()
+  logActivity(user, 'Hapus Master', kode + ' ' + (ex.nama || ''))
+  return { deleted: true, kode }
 }
 
 export async function saveUser({ user, staf = {} }) {
@@ -574,6 +627,7 @@ export async function saveUser({ user, staf = {} }) {
   }
   if (existing && newKey !== oldKey) await rdbRemove('users/' + oldKey)
   await rdbSet('users/' + newKey, rec)
+  logActivity(user, existing ? 'Edit Staf' : 'Tambah Staf', staf.nama + ' (' + rec.peran + ')')
   return existing ? { nama: staf.nama, updated: true } : { nama: staf.nama, created: true }
 }
 
@@ -661,5 +715,6 @@ export async function saveBrand({ user, brand }) {
     await rdbRemove('brandLogo')
     await rdbSet('brand', { ...rest, logo: '' })
   }
+  logActivity(user, 'Ubah Tampilan', 'logo/warna/font')
   return { ok: true }
 }

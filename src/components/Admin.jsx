@@ -10,6 +10,7 @@ const SECTIONS = [
   ['master', 'Item Master'],
   ['staf', 'Staf & PIN'],
   ['kw', 'Kata Kunci Klasifikasi'],
+  ['log', 'Aktivitas'],
   ['tampilan', 'Tampilan'],
   ['ekspor', 'Ekspor'],
 ]
@@ -28,6 +29,7 @@ export default function Admin({ user, onToast, onBrandSaved }) {
         {sec === 'master' && <MasterAdmin user={user} onToast={onToast} />}
         {sec === 'staf' && <StafAdmin user={user} onToast={onToast} />}
         {sec === 'kw' && <KeywordAdmin user={user} onToast={onToast} />}
+        {sec === 'log' && <ActivityLog onToast={onToast} />}
         {sec === 'tampilan' && <BrandPanel user={user} onToast={onToast} onSaved={onBrandSaved} />}
         {sec === 'ekspor' && <Ekspor user={user} onToast={onToast} />}
       </div>
@@ -154,6 +156,17 @@ function MasterAdmin({ user, onToast }) {
     } catch (e) { onToast('err', e.message) } finally { setBusy(false) }
   }
 
+  async function del() {
+    if (!edit.kode) return
+    if (!window.confirm(`Hapus item "${edit.nama}" (${edit.kode}) dari master?\n\nRiwayat transaksi lama tetap tersimpan. Jika item ini masih dipakai, sebaiknya set "Nonaktif" saja daripada dihapus.`)) return
+    setBusy(true)
+    try {
+      await api.deleteMaster({ user: user.nama, kode: edit.kode })
+      onToast('ok', 'Item dihapus.')
+      setEdit(null); load()
+    } catch (e) { onToast('err', e.message) } finally { setBusy(false) }
+  }
+
   if (edit) {
     return (
       <div className="admin-form">
@@ -180,6 +193,7 @@ function MasterAdmin({ user, onToast }) {
           <label>Aktif<select value={edit.aktif ? '1' : '0'} onChange={(e) => setEdit({ ...edit, aktif: e.target.value === '1' })}><option value="1">Aktif</option><option value="0">Nonaktif</option></select></label>
         </div>
         <div className="bsave">
+          {edit.kode && <button className="btn danger" disabled={busy} onClick={del} style={{ marginRight: 'auto' }}>Hapus</button>}
           <button className="btn ghost" onClick={() => setEdit(null)}>Batal</button>
           <button className="btn" disabled={busy} onClick={save}>{busy ? 'Menyimpan…' : 'Simpan'}</button>
         </div>
@@ -350,6 +364,46 @@ function KeywordAdmin({ user, onToast }) {
               ))}
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------- Log Aktivitas ----------------
+function ActivityLog({ onToast }) {
+  const [logs, setLogs] = useState(null)
+  const [who, setWho] = useState('')
+
+  const load = () => { setLogs(null); api.getActivity().then(setLogs).catch((e) => onToast('err', e.message)) }
+  useEffect(() => { load() }, [])
+
+  const users = useMemo(() => [...new Set((logs || []).map((l) => l.user))].sort(), [logs])
+  const filtered = (logs || []).filter((l) => !who || l.user === who)
+  const fmtTime = (ts) => { try { return new Date(ts).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) } catch { return '' } }
+
+  return (
+    <div>
+      <p className="rekap-sub">Riwayat tindakan tiap akun (pemakaian, opname, belanja, perubahan data). Tercatat otomatis.</p>
+      <div className="toolbar">
+        <select className="filter" value={who} onChange={(e) => setWho(e.target.value)}>
+          <option value="">Semua staf</option>
+          {users.map((u) => <option key={u} value={u}>{u}</option>)}
+        </select>
+        <button className="btn ghost sm" onClick={load}>Muat ulang</button>
+      </div>
+      {logs === null ? <div className="state"><span className="spin" />Memuat…</div> : filtered.length === 0 ? (
+        <div className="state">Belum ada aktivitas tercatat.</div>
+      ) : (
+        <div className="log-list">
+          {filtered.map((l, i) => (
+            <div className="log-row" key={i}>
+              <div className="log-head"><b>{l.user}</b> <span className="log-aksi">{l.aksi}</span></div>
+              {l.detail && <div className="muted sm">{l.detail}</div>}
+              <div className="log-time">{fmtTime(l.ts)}</div>
+            </div>
+          ))}
+          <div className="muted sm" style={{ padding: '8px 2px' }}>{filtered.length} aktivitas</div>
         </div>
       )}
     </div>
