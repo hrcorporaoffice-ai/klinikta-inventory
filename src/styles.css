@@ -97,6 +97,7 @@ tbody tr:hover{background:#fafcff}
 .badge.ok{background:#e7f6ef;color:var(--ok)}
 .badge.warn{background:#fdf6e3;color:var(--warn)}
 .badge.low{background:#fdeaea;color:var(--low)}
+.badge.kosong{background:var(--red);color:#fff}
 .unit{color:var(--muted);font-size:12px}
 .tag-detail{font-size:9.5px;background:#ede9fe;color:#6d28d9;padding:1px 6px;border-radius:9px;font-weight:600;letter-spacing:.2px}
 

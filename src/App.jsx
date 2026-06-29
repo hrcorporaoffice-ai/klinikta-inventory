@@ -15,7 +15,7 @@ const MODES = [
 const GRID_MODES = ['pakai', 'opname']  // mode yang pakai grid item + savebar
 
 const rupiah = (n) => 'Rp ' + new Intl.NumberFormat('id-ID').format(Math.round(n || 0))
-const BADGE = { aman: ['ok', 'aman'], menipis: ['warn', 'menipis'], low: ['low', 'stok rendah'] }
+const BADGE = { aman: ['ok', 'aman'], menipis: ['warn', 'menipis'], low: ['low', 'Restock Now ⚠️'], kosong: ['kosong', 'Stok Kosong 🚨'] }
 
 // Hitung jumlah master per kelompok (fallback sebelum data server datang).
 const MASTER_COUNTS = MASTER_ITEMS.reduce((a, m) => ((a[m.kelompok] = (a[m.kelompok] || 0) + 1), a), {})

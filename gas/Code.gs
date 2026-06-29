@@ -373,9 +373,9 @@ function getState_(kelompok, tanggal) {
 }
 
 function stockStatus_(stok, reorder) {
-  // Tanpa titik reorder, anggap aman (Tahap 1: belum semua item punya reorder).
+  if (stok <= 0) return 'kosong';           // habis → Stok Kosong
   if (!reorder || reorder <= 0) return 'aman';
-  if (stok <= reorder) return 'low';        // stok rendah
+  if (stok <= reorder) return 'low';        // ≤ reorder → Restock Now
   if (stok <= reorder * 2) return 'menipis';
   return 'aman';
 }

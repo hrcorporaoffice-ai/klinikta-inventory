@@ -54,8 +54,9 @@ const groupCounts = (master) => {
   return c
 }
 const stockStatus = (stok, reorder) => {
+  if (stok <= 0) return 'kosong'                 // habis → 🚨 (berlaku tanpa lihat reorder)
   if (!reorder || reorder <= 0) return 'aman'
-  if (stok <= reorder) return 'low'
+  if (stok <= reorder) return 'low'              // ≤ titik reorder → Restock Now ⚠️
   if (stok <= reorder * 2) return 'menipis'
   return 'aman'
 }
