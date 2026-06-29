@@ -209,6 +209,7 @@ function NotaRow({ n, user, today, masterList, keywords, onToast, onChanged }) {
         {n.items.map((it) => (
           <span className="nota-chip" key={it.baris}>
             {it.nama} ×{it.qty}{it.kelompok ? <i> → {it.kelompok}{it.kodeMaster ? ` (${it.kodeMaster})` : ''}</i> : (it.klasifikasi ? <i> → {it.klasifikasi}</i> : null)}
+            {it.batch ? <i> · batch {it.batch}</i> : null}{it.expired ? <i> · exp {it.expired}</i> : null}
           </span>
         ))}
       </div>
@@ -258,13 +259,16 @@ function NotaRow({ n, user, today, masterList, keywords, onToast, onChanged }) {
   )
 }
 
-const TARGETS = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes', 'Aset']
+const TARGETS = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes', 'ATK', 'Aset']
+const TARGET_LABEL = { ATK: 'ATK & Perlengkapan Kantor' }
+// BHP & Obat butuh Batch + Tanggal Expired saat diterima.
+const needsBatch = (t) => t === 'BHP Gigi' || t === 'BHP Umum' || t === 'Obat'
 
 function Finalisasi({ n, user, masterList, keywords, onToast, onDone }) {
   // satu baris pemetaan per item nota
   const [maps, setMaps] = useState(() => n.items.map((it) => {
     const target = guessTarget(it.nama, keywords)
-    return { baris: it.baris, nama: it.nama, qty: it.qty, target, kodeMaster: '', addNew: false, newItem: { nama: it.nama, subKategori: '', satuan: '', kemasan: '', hargaAcuan: '' } }
+    return { baris: it.baris, nama: it.nama, qty: it.qty, target, kodeMaster: '', addNew: false, batch: '', expired: '', newItem: { nama: it.nama, subKategori: '', satuan: '', kemasan: '', hargaAcuan: '' } }
   }))
   const [faktur, setFaktur] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -292,6 +296,8 @@ function Finalisasi({ n, user, masterList, keywords, onToast, onDone }) {
         target: m.target,
         kodeMaster: m.target !== 'Aset' && !m.addNew ? m.kodeMaster : '',
         newItem: m.target !== 'Aset' && m.addNew ? { ...m.newItem, hargaAcuan: Number(m.newItem.hargaAcuan) || 0 } : null,
+        batch: needsBatch(m.target) ? m.batch.trim() : '',
+        expired: needsBatch(m.target) ? m.expired : '',
       }))
       await api.finalizeBelanja({ idBelanja: n.idBelanja, mappings, fakturUrl, user: user.nama })
       onToast('ok', 'Barang masuk stok. Faktur tersimpan.')
@@ -307,7 +313,7 @@ function Finalisasi({ n, user, masterList, keywords, onToast, onDone }) {
           <div className="fin-name">{m.nama} <span className="muted">×{m.qty}</span></div>
           <div className="fin-controls">
             <select value={m.target} onChange={(e) => setMap(m.baris, { target: e.target.value, kodeMaster: '', addNew: false })}>
-              {TARGETS.map((t) => <option key={t} value={t}>{t}</option>)}
+              {TARGETS.map((t) => <option key={t} value={t}>{TARGET_LABEL[t] || t}</option>)}
             </select>
 
             {m.target === 'Aset' ? (
@@ -329,6 +335,17 @@ function Finalisasi({ n, user, masterList, keywords, onToast, onDone }) {
               </>
             )}
           </div>
+
+          {needsBatch(m.target) && (
+            <div className="fin-batch">
+              <label>No. Batch
+                <input placeholder="mis. A1234" value={m.batch} onChange={(e) => setMap(m.baris, { batch: e.target.value })} />
+              </label>
+              <label>Expired
+                <input type="date" value={m.expired} onChange={(e) => setMap(m.baris, { expired: e.target.value })} />
+              </label>
+            </div>
+          )}
         </div>
       ))}
       <div className="fin-foot">

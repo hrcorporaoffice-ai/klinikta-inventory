@@ -40,9 +40,9 @@ var STATUS_FLOW = ['Dipesan', 'Dibayar', 'Diterima', 'Masuk Stok'];
 // Kelompok yang dihitung sebagai Persediaan (aset lancar) di rekap LAPKEU.
 var KELOMPOK_PERSEDIAAN = { 'BHP Gigi': true, 'BHP Umum': true, 'Obat': true };
 // Semua kelompok stok yang valid sebagai tujuan saat "Masuk Stok".
-var KELOMPOK_STOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes'];
+var KELOMPOK_STOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes', 'ATK'];
 // Prefix kode item master baru per kelompok (untuk tambah item saat finalisasi).
-var KODE_PREFIX = { 'BHP Gigi': 'BHPG-', 'BHP Umum': 'BHPU-', 'Obat': 'OBT-', 'Alkes': 'ALK-' };
+var KODE_PREFIX = { 'BHP Gigi': 'BHPG-', 'BHP Umum': 'BHPU-', 'Obat': 'OBT-', 'Alkes': 'ALK-', 'ATK': 'ATK-' };
 
 var DRIVE_FOLDER_NAME = 'INVENTORY_KLINIKTA_Bukti'; // folder bukti faktur/foto (Drive terpisah)
 var PROP_FOLDER_ID = 'INVENTORY_DRIVE_FOLDER_ID';
@@ -60,7 +60,7 @@ var HEADERS = {
             'dipesanOleh', 'dibayarOleh', 'diterimaOleh', 'distokOleh', 'catatan'],
   itemBelanja: ['idBelanja', 'baris', 'nama', 'qty', 'hargaSatuan', 'subtotalItem',
                 'alokasiBiaya', 'hargaRiilTotal', 'hargaRiilUnit',
-                'klasifikasi', 'kodeMaster', 'kelompok'],
+                'klasifikasi', 'kodeMaster', 'kelompok', 'batch', 'expired'],
   antrianAset: ['idAset', 'timestamp', 'idBelanja', 'nama', 'tanggalTerima', 'hargaTotal',
                 'sumber', 'kategori', 'statusCatat'],
   klasifikasiKw: ['klasifikasi', 'keyword'],
@@ -595,7 +595,7 @@ function finalizeBelanja_(body) {
     } else {
       if (KELOMPOK_STOK.indexOf(target) < 0) throw new Error('Tujuan tidak valid: ' + target);
       kelompok = target;
-      klas = (target === 'Obat') ? 'Obat' : (target === 'Alkes') ? 'Alkes' : 'BHP';
+      klas = (target === 'Obat') ? 'Obat' : (target === 'Alkes') ? 'Alkes' : (target === 'ATK') ? 'ATK' : 'BHP';
       if (mp.kodeMaster) kode = mp.kodeMaster;
       else if (mp.newItem && mp.newItem.nama) kode = createMasterItem_(target, mp.newItem);
       else throw new Error('Baris ' + mp.baris + ' belum dipetakan ke item master.');
@@ -643,6 +643,7 @@ function defaultKategori_(kelompok) {
   if (kelompok === 'Obat') return 'Obat-obatan';
   if (kelompok === 'BHP Umum') return 'Penjualan BHP';
   if (kelompok === 'Alkes') return 'Beban Alkes';
+  if (kelompok === 'ATK') return 'Beban ATK dan Perlengkapan Kantor';
   return 'Beban Penggunaan Produk Internal'; // BHP Gigi
 }
 
@@ -822,12 +823,13 @@ function getRekap_(periode) {
     if (String(b.status) === 'Masuk Stok' && fmtDate_(b.tanggalTerima).slice(0, 7) === per) recvInPeriod[b.idBelanja] = b;
   });
 
-  var totalPersediaan = 0, totalBebanAlkes = 0;
+  var totalPersediaan = 0, totalBebanAlkes = 0, totalBebanATK = 0;
   readSheet_(SHEETS.itemBelanja).forEach(function (it) {
     if (!recvInPeriod[it.idBelanja]) return;
     var v = num_(it.hargaRiilTotal);
     if (KELOMPOK_PERSEDIAAN[it.kelompok]) totalPersediaan += v;       // BHP Gigi/Umum/Obat
     else if (String(it.kelompok) === 'Alkes') totalBebanAlkes += v;   // Alkes -> beban
+    else if (String(it.kelompok) === 'ATK') totalBebanATK += v;       // ATK -> beban
   });
 
   var aset = readSheet_(SHEETS.antrianAset)
@@ -854,7 +856,7 @@ function getRekap_(periode) {
 
   return {
     periode: per,
-    persediaan: { totalPersediaan: Math.round(totalPersediaan), totalBebanAlkes: Math.round(totalBebanAlkes) },
+    persediaan: { totalPersediaan: Math.round(totalPersediaan), totalBebanAlkes: Math.round(totalBebanAlkes), totalBebanATK: Math.round(totalBebanATK) },
     antrianAset: aset,
     hppPemakaian: Object.keys(hpp).map(function (k) { return { kelompok: k, total: Math.round(hpp[k]) }; }),
     selisihOpname: selisih,

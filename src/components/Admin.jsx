@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import * as api from '../api.js'
 import { BRAND_DEFAULT, FONTS, applyTheme } from '../brand.js'
 
-const KELOMPOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes']
+const KELOMPOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes', 'ATK']
 const PERAN = ['logistik', 'bendahara', 'penerima', 'admin']
 const splitPeran = (p) => String(p || 'staf').split(',').map((r) => r.trim()).filter(Boolean)
 const joinPeran = (arr) => arr.length ? arr.join(',') : 'staf'
@@ -124,7 +124,7 @@ function BrandPanel({ user, onToast, onSaved }) {
 }
 
 // ---------------- Master ----------------
-const emptyItem = { kode: '', nama: '', kelompok: 'BHP Gigi', subKategori: '', satuan: '', kemasan: '', hargaAcuan: '', metode: 'Praktis', titikReorder: '', aktif: true }
+const emptyItem = { kode: '', nama: '', kelompok: 'BHP Gigi', subKategori: '', satuan: '', kemasan: '', hargaAcuan: '', metode: 'Praktis', titikReorder: 1, aktif: true }
 
 function MasterAdmin({ user, onToast }) {
   const [items, setItems] = useState(null)

@@ -214,6 +214,10 @@ td.num{text-align:center}
 .fin-controls select{padding:8px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;background:#fff;outline:none}
 .fin-new{display:flex;gap:6px;flex-wrap:wrap;flex:1}
 .fin-new input{flex:1;min-width:110px;padding:8px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;outline:none}
+.fin-batch{display:flex;gap:10px;flex-wrap:wrap;background:#f0f7fc;border:1px solid #dceaf6;border-radius:9px;padding:8px 10px}
+.fin-batch label{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--navy);font-weight:700;flex:1;min-width:120px}
+.fin-batch input{padding:8px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;outline:none;background:#fff;min-width:0}
+.fin-batch input:focus{border-color:var(--blue)}
 .fin-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;padding-top:8px;border-top:1px solid #dceaf6}
 
 /* Admin */

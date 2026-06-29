@@ -3,7 +3,17 @@
 //
 // Patokan: masa manfaat > 1 tahun → kemungkinan Aset (ketentuan pajak), bukan semata harga.
 
-export const KLASIFIKASI = ['BHP', 'Obat', 'Alkes', 'Aset']
+export const KLASIFIKASI = ['BHP', 'Obat', 'Alkes', 'ATK', 'Aset']
+
+// ATK & perlengkapan kantor → beban langsung.
+const ATK = [
+  'kertas', 'hvs', 'pulpen', 'pena', 'pensil', 'spidol', 'marker', 'map', 'amplop',
+  'stapler', 'staples', 'klip', 'binder', 'buku', 'nota', 'kwitansi', 'stempel', 'tinta',
+  'toner', 'cartridge', 'lakban', 'selotip', 'gunting kertas', 'penggaris', 'lem',
+  'sticky note', 'post it', 'ordner', 'tipe x', 'tip ex', 'correction', 'baterai', 'batere',
+  'kalkulator', 'atk', 'alat tulis', 'kabel', 'colokan', 'terminal listrik', 'galon',
+  'tisu', 'sabun', 'pembersih', 'pewangi', 'sapu', 'pel', 'kemoceng', 'tempat sampah',
+]
 
 // Dipakai bertahun-tahun, nilai besar → Aset.
 const ASET = [
@@ -42,12 +52,13 @@ export function guessKlasifikasi(nama) {
   if (!nama) return 'BHP'
   if (hit(nama, ASET)) return 'Aset'
   if (hit(nama, ALKES)) return 'Alkes'
+  if (hit(nama, ATK)) return 'ATK'
   if (hit(nama, OBAT)) return 'Obat'
   return 'BHP'
 }
 
 // Tebak dari kata kunci yang dikelola admin (list {klasifikasi, keyword}).
-// Prioritas: Aset > Alkes > Obat (cocok dengan tiga jalur). Fallback ke guess statis.
+// Prioritas: Aset > Alkes > ATK > Obat. Fallback ke guess statis.
 export function guessFromKeywords(nama, keywords) {
   if (!nama) return 'BHP'
   if (!keywords || !keywords.length) return guessKlasifikasi(nama)
@@ -55,16 +66,18 @@ export function guessFromKeywords(nama, keywords) {
   const has = (klas) => keywords.some((k) => k.klasifikasi === klas && n.includes(String(k.keyword).toLowerCase()))
   if (has('Aset')) return 'Aset'
   if (has('Alkes')) return 'Alkes'
+  if (has('ATK')) return 'ATK'
   if (has('Obat')) return 'Obat'
-  return 'BHP'
+  return guessKlasifikasi(nama)
 }
 
-// Tebakan kelompok target saat finalisasi (logistik): Aset/Alkes -> kelompok itu,
+// Tebakan kelompok target saat finalisasi (logistik): Aset/Alkes/ATK -> kelompok itu,
 // Obat -> Obat, sisanya default BHP Gigi (mayoritas item gigi).
 export function guessTarget(nama, keywords) {
   const klas = guessFromKeywords(nama, keywords)
   if (klas === 'Aset') return 'Aset'
   if (klas === 'Alkes') return 'Alkes'
+  if (klas === 'ATK') return 'ATK'
   if (klas === 'Obat') return 'Obat'
   return 'BHP Gigi'
 }
@@ -72,5 +85,6 @@ export function guessTarget(nama, keywords) {
 export const PANDUAN_KLAS = [
   ['BHP / Obat', 'Habis dipakai (komposit, kapas, obat, jarum). → menambah stok'],
   ['Alkes', 'Dipakai ulang, awet tapi nilai kecil (bur set, pinset). → beban langsung'],
+  ['ATK & Perlengkapan', 'Alat tulis & perlengkapan kantor (kertas, pulpen, tinta). → beban langsung'],
   ['Aset', 'Dipakai bertahun-tahun, nilai besar (scaler, light cure, dental unit). → Daftar Aset'],
 ]

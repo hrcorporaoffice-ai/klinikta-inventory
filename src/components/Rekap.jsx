@@ -56,6 +56,10 @@ export default function Rekap({ user, today, onToast }) {
             label="Total Beban Alkes"
             akun="Akoontan: Pengeluaran · kategori Beban Alkes"
             value={data.persediaan.totalBebanAlkes} onCopy={copy} />
+          <RekapRow
+            label="Total Beban ATK & Perlengkapan Kantor"
+            akun="Akoontan: Pengeluaran · kategori Beban ATK dan Perlengkapan Kantor"
+            value={data.persediaan.totalBebanATK || 0} onCopy={copy} />
 
           <div className="rekap-aset">
             <div className="ra-head">Aset perlu dicatat manual ke Daftar Aset Akoontan ({data.antrianAset.length})</div>

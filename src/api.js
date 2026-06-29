@@ -19,8 +19,10 @@ export const isConfigured = () => true
 // Konstanta (disalin dari Code.gs)
 // ---------------------------------------------------------------------------
 const KELOMPOK_PERSEDIAAN = { 'BHP Gigi': true, 'BHP Umum': true, 'Obat': true }
-const KELOMPOK_STOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes']
-const KODE_PREFIX = { 'BHP Gigi': 'BHPG-', 'BHP Umum': 'BHPU-', 'Obat': 'OBT-', 'Alkes': 'ALK-' }
+const KELOMPOK_STOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes', 'ATK']
+const KODE_PREFIX = { 'BHP Gigi': 'BHPG-', 'BHP Umum': 'BHPU-', 'Obat': 'OBT-', 'Alkes': 'ALK-', 'ATK': 'ATK-' }
+// Kelompok yang butuh Batch & Tanggal Expired saat diterima ke stok.
+const KELOMPOK_BATCH = { 'BHP Gigi': true, 'BHP Umum': true, 'Obat': true }
 const STATUS_FLOW = ['Dipesan', 'Dibayar', 'Diterima', 'Masuk Stok']
 
 // ---------------------------------------------------------------------------
@@ -61,6 +63,7 @@ const defaultKategori = (kelompok) => {
   if (kelompok === 'Obat') return 'Obat-obatan'
   if (kelompok === 'BHP Umum') return 'Penjualan BHP'
   if (kelompok === 'Alkes') return 'Beban Alkes'
+  if (kelompok === 'ATK') return 'Beban ATK dan Perlengkapan Kantor'
   return 'Beban Penggunaan Produk Internal'
 }
 
@@ -94,6 +97,7 @@ function belanjaToSheet(nota) {
     idBelanja: nota.idBelanja, baris: num(it.baris), nama: it.nama, qty: num(it.qty), hargaSatuan: num(it.hargaSatuan),
     subtotalItem: num(it.subtotalItem), alokasiBiaya: num(it.alokasiBiaya), hargaRiilTotal: num(it.hargaRiilTotal),
     hargaRiilUnit: num(it.hargaRiilUnit), klasifikasi: it.klasifikasi || '', kodeMaster: it.kodeMaster || '', kelompok: it.kelompok || '',
+    batch: it.batch || '', expired: it.expired || '',
   })) : []
   return { nota: notaRow, items }
 }
@@ -302,6 +306,7 @@ export async function getBelanja() {
       baris: num(it.baris), nama: it.nama, qty: num(it.qty), hargaSatuan: num(it.hargaSatuan),
       hargaRiilTotal: num(it.hargaRiilTotal), hargaRiilUnit: num(it.hargaRiilUnit),
       klasifikasi: it.klasifikasi || '', kodeMaster: it.kodeMaster || '', kelompok: it.kelompok || '',
+      batch: it.batch || '', expired: it.expired || '',
     })),
   }))
 }
@@ -314,13 +319,14 @@ export async function getRekap(periode) {
   const recv = {}
   belanja.forEach((b) => { if (String(b.status) === 'Masuk Stok' && fmtDate(b.tanggalTerima).slice(0, 7) === per) recv[b.idBelanja] = b })
 
-  let totalPersediaan = 0, totalBebanAlkes = 0
+  let totalPersediaan = 0, totalBebanAlkes = 0, totalBebanATK = 0
   belanja.forEach((b) => {
     if (!recv[b.idBelanja]) return
     b.items.forEach((it) => {
       const v = num(it.hargaRiilTotal)
       if (KELOMPOK_PERSEDIAAN[it.kelompok]) totalPersediaan += v
       else if (String(it.kelompok) === 'Alkes') totalBebanAlkes += v
+      else if (String(it.kelompok) === 'ATK') totalBebanATK += v
     })
   })
 
@@ -343,7 +349,7 @@ export async function getRekap(periode) {
 
   return {
     periode: per,
-    persediaan: { totalPersediaan: Math.round(totalPersediaan), totalBebanAlkes: Math.round(totalBebanAlkes) },
+    persediaan: { totalPersediaan: Math.round(totalPersediaan), totalBebanAlkes: Math.round(totalBebanAlkes), totalBebanATK: Math.round(totalBebanATK) },
     antrianAset: aset,
     hppPemakaian: Object.keys(hpp).map((k) => ({ kelompok: k, total: Math.round(hpp[k]) })),
     selisihOpname: selisih,
@@ -422,7 +428,7 @@ export async function saveBelanja({ nota = {}, items = [], user }) {
     itemsMap[String(baris)] = {
       baris, nama: it.nama || '', qty: q, hargaSatuan: h, subtotalItem: sub,
       alokasiBiaya: aBiaya, hargaRiilTotal: riilTotal, hargaRiilUnit: riilUnit,
-      klasifikasi: '', kodeMaster: '', kelompok: '',
+      klasifikasi: '', kodeMaster: '', kelompok: '', batch: '', expired: '',
     }
   })
 
@@ -478,12 +484,15 @@ export async function finalizeBelanja({ idBelanja, mappings = [], fakturUrl, use
     } else {
       if (KELOMPOK_STOK.indexOf(target) < 0) throw new Error('Tujuan tidak valid: ' + target)
       kelompok = target
-      klas = (target === 'Obat') ? 'Obat' : (target === 'Alkes') ? 'Alkes' : 'BHP'
+      klas = (target === 'Obat') ? 'Obat' : (target === 'Alkes') ? 'Alkes' : (target === 'ATK') ? 'ATK' : 'BHP'
       if (mp.kodeMaster) kode = mp.kodeMaster
       else if (mp.newItem && mp.newItem.nama) kode = await createMasterItem(target, mp.newItem)
       else throw new Error('Baris ' + mp.baris + ' belum dipetakan ke item master.')
     }
-    await rdbUpdate('belanja/' + idBelanja + '/items/' + mp.baris, { kodeMaster: kode, kelompok, klasifikasi: klas })
+    // Batch & expired hanya relevan utk BHP/Obat (KELOMPOK_BATCH); selain itu dikosongkan.
+    const batch = KELOMPOK_BATCH[target] ? (mp.batch || '') : ''
+    const expired = KELOMPOK_BATCH[target] ? (mp.expired || '') : ''
+    await rdbUpdate('belanja/' + idBelanja + '/items/' + mp.baris, { kodeMaster: kode, kelompok, klasifikasi: klas, batch, expired })
   }
 
   const upd = { status: 'Masuk Stok', distokOleh: user || '' }
@@ -541,7 +550,7 @@ async function createMasterItem(kelompok, d) {
     kode, nama: d.nama, kelompok, kategoriProduk: kelompok, subKategori: d.subKategori || 'Lainnya',
     satuan: d.satuan || '', kemasan: d.kemasan || '', hargaAcuan: num(d.hargaAcuan),
     kategoriDefault: defaultKategori(kelompok), metode: d.metode || 'Praktis',
-    titikReorder: (d.titikReorder === '' || d.titikReorder == null) ? '' : num(d.titikReorder), aktif: true,
+    titikReorder: (d.titikReorder === '' || d.titikReorder == null) ? 1 : num(d.titikReorder), aktif: true,
   })
   mirrorMasterFull()
   return kode
