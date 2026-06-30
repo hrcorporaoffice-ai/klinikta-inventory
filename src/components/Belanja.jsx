@@ -6,6 +6,12 @@ const rupiah = (n) => 'Rp ' + new Intl.NumberFormat('id-ID').format(Math.round(n
 const STATUS_BADGE = { Dipesan: 'warn', Dibayar: 'b', Diterima: 'b', 'Masuk Stok': 'ok' }
 const newRow = () => ({ id: Math.random().toString(36).slice(2), nama: '', qty: '', hargaSatuan: '' })
 
+// Draft composer belanja disimpan ke localStorage agar tidak hilang saat HP memuat
+// ulang halaman (mis. pindah ke app Shopee lalu kembali ke browser).
+const DRAFT_KEY = 'inv_belanja_draft'
+const loadDraft = () => { try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null') } catch { return null } }
+const clearDraft = () => { try { localStorage.removeItem(DRAFT_KEY) } catch {} }
+
 // Satu akun bisa punya beberapa peran (comma-separated). Admin selalu boleh segalanya.
 const parsePeran = (p) => String(p || 'staf').split(',').map((r) => r.trim()).filter(Boolean)
 const can = (user, role) => { const r = parsePeran(user.peran); return r.includes('admin') || r.includes(role) }
@@ -21,18 +27,25 @@ function fileToBase64(file) {
 }
 
 export default function Belanja({ user, today, onToast, onChanged }) {
-  // Composer nota
-  const [tanggalPesan, setTanggalPesan] = useState(today)
-  const [sumber, setSumber] = useState('')
-  const [supplier, setSupplier] = useState('')
-  const [noVA, setNoVA] = useState('')
-  const [pengiriman, setPengiriman] = useState('')
-  const [diskonPengiriman, setDiskonPengiriman] = useState('')
-  const [voucherShopee, setVoucherShopee] = useState('')
-  const [voucherToko, setVoucherToko] = useState('')
-  const [biayaLayanan, setBiayaLayanan] = useState('')
-  const [rows, setRows] = useState([newRow()])
+  // Composer nota — inisialisasi dari draft tersimpan (jika ada) agar tahan reload HP.
+  const draft0 = useMemo(loadDraft, [])
+  const [tanggalPesan, setTanggalPesan] = useState(draft0?.tanggalPesan ?? today)
+  const [sumber, setSumber] = useState(draft0?.sumber ?? '')
+  const [supplier, setSupplier] = useState(draft0?.supplier ?? '')
+  const [noVA, setNoVA] = useState(draft0?.noVA ?? '')
+  const [pengiriman, setPengiriman] = useState(draft0?.pengiriman ?? '')
+  const [diskonPengiriman, setDiskonPengiriman] = useState(draft0?.diskonPengiriman ?? '')
+  const [voucherShopee, setVoucherShopee] = useState(draft0?.voucherShopee ?? '')
+  const [voucherToko, setVoucherToko] = useState(draft0?.voucherToko ?? '')
+  const [biayaLayanan, setBiayaLayanan] = useState(draft0?.biayaLayanan ?? '')
+  const [rows, setRows] = useState(draft0?.rows?.length ? draft0.rows : [newRow()])
   const [saving, setSaving] = useState(false)
+
+  // Simpan draft tiap ada perubahan (anti hilang saat browser HP reload).
+  useEffect(() => {
+    const draft = { tanggalPesan, sumber, supplier, noVA, pengiriman, diskonPengiriman, voucherShopee, voucherToko, biayaLayanan, rows }
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch {}
+  }, [tanggalPesan, sumber, supplier, noVA, pengiriman, diskonPengiriman, voucherShopee, voucherToko, biayaLayanan, rows])
 
   // Data pendukung
   const [list, setList] = useState(null)
@@ -83,8 +96,15 @@ export default function Belanja({ user, today, onToast, onChanged }) {
       setRows([newRow()]); setSumber(''); setSupplier(''); setNoVA('')
       setPengiriman(''); setDiskonPengiriman(''); setVoucherShopee(''); setVoucherToko(''); setBiayaLayanan('')
       setTanggalPesan(today)
+      clearDraft()
       loadList()
     } catch (e) { onToast('err', e.message) } finally { setSaving(false) }
+  }
+
+  function resetComposer() {
+    setRows([newRow()]); setSumber(''); setSupplier(''); setNoVA('')
+    setPengiriman(''); setDiskonPengiriman(''); setVoucherShopee(''); setVoucherToko(''); setBiayaLayanan('')
+    setTanggalPesan(today); clearDraft()
   }
 
   return (
@@ -137,6 +157,7 @@ export default function Belanja({ user, today, onToast, onChanged }) {
           <div className="bt-line total"><span>Total Bayar</span><b>{rupiah(calc.total)}</b></div>
         </div>
         <div className="bsave">
+          <button className="btn ghost" onClick={resetComposer}>Kosongkan</button>
           <button className="btn" disabled={!canSave} onClick={handleSave}>{saving ? 'Menyimpan…' : 'Simpan Belanja'}</button>
         </div>
       </div>
