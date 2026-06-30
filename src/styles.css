@@ -260,6 +260,12 @@ td.num{text-align:center}
 .log-head{font-size:14px}
 .log-aksi{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:20px;background:var(--soft);color:var(--navy);font-size:12px;font-weight:600}
 .log-time{font-size:11.5px;color:var(--muted);margin-top:2px}
+/* Modal (tambah item cepat) */
+.modal-overlay{position:fixed;inset:0;background:rgba(20,30,45,.45);display:flex;align-items:center;justify-content:center;padding:18px;z-index:50}
+.modal{background:#fff;border-radius:16px;padding:18px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.25);max-height:90vh;overflow:auto}
+.modal .bform{grid-template-columns:1fr 1fr;padding:0 0 12px}
+.modal .bsave{padding-top:4px}
+@media(max-width:560px){.modal .bform{grid-template-columns:1fr}}
 /* Kelola data pemakaian & opname (admin, di Rekap) */
 .kelola{margin-top:18px;border-top:1px dashed var(--line);padding-top:14px}
 .kelola-sub{font-weight:700;color:var(--navy);font-size:14px;margin-bottom:6px}

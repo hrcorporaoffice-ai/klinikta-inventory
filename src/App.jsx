@@ -202,6 +202,8 @@ function InventoryApp({ user, brand, reloadBrand, onLogout }) {
     : baseModes
   // Jika mode aktif tak boleh diakses peran ini, kembalikan ke Pemakaian.
   useEffect(() => { if (!modes.some((m) => m.id === mode)) setMode('pakai') }, [mode, canRekap, isAdmin])
+  const canAddItem = isAdmin || roles.includes('logistik') // boleh tambah item baru dari Opname
+  const [addOpen, setAddOpen] = useState(false)
   const modeMeta = modes.find((m) => m.id === mode) || MODES[0]
   const isGrid = GRID_MODES.includes(mode)
 
@@ -252,7 +254,7 @@ function InventoryApp({ user, brand, reloadBrand, onLogout }) {
 
         {isGrid ? (
           <>
-            {/* Toolbar — cukup kotak pencarian */}
+            {/* Toolbar — kotak pencarian + tambah item (Opname, logistik/admin) */}
             <div className="toolbar">
               <div className="search">
                 🔍<input
@@ -261,6 +263,9 @@ function InventoryApp({ user, brand, reloadBrand, onLogout }) {
                   onChange={(e) => setQuery(e.target.value)}
                 />
               </div>
+              {mode === 'opname' && canAddItem && (
+                <button className="btn sm" onClick={() => setAddOpen(true)}>+ Item Baru</button>
+              )}
             </div>
 
             {/* Grid */}
@@ -316,8 +321,59 @@ function InventoryApp({ user, brand, reloadBrand, onLogout }) {
         </div>
       )}
 
+      {addOpen && (
+        <QuickAddItem
+          user={user}
+          defaultGroup={group}
+          onClose={() => setAddOpen(false)}
+          onAdded={(it) => {
+            setAddOpen(false)
+            showToast('ok', `Item "${it.nama}" ditambahkan (${it.kode}). Isi stok fisiknya lalu Simpan Opname.`)
+            if (it.kelompok !== group) setGroup(it.kelompok)
+            load(true)
+          }}
+        />
+      )}
+
       {toast && <div className={'toast ' + toast.type}>{toast.msg}</div>}
     </>
+  )
+}
+
+// Modal tambah item master cepat (dari layar Opname) — logistik & admin.
+function QuickAddItem({ user, defaultGroup, onClose, onAdded }) {
+  const [form, setForm] = useState({ nama: '', kelompok: defaultGroup, satuan: '', subKategori: '' })
+  const [busy, setBusy] = useState(false)
+  const set = (patch) => setForm((f) => ({ ...f, ...patch }))
+
+  async function submit() {
+    if (!form.nama.trim()) return
+    setBusy(true)
+    try {
+      const res = await api.addMasterItem({ user: user.nama, item: { ...form, titikReorder: 1 } })
+      onAdded(res)
+    } catch (e) { alert(e.message); setBusy(false) }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3 className="rekap-h">Tambah Item Baru</h3>
+        <p className="muted sm" style={{ marginBottom: 10 }}>Item baru muncul di daftar; isi stok fisik awalnya lewat Opname lalu Simpan. Titik reorder default 1 (bisa diubah admin nanti).</p>
+        <div className="bform">
+          <label>Nama<input autoFocus value={form.nama} onChange={(e) => set({ nama: e.target.value })} placeholder="mis. Paper Point #30" /></label>
+          <label>Kelompok
+            <select value={form.kelompok} onChange={(e) => set({ kelompok: e.target.value })}>{KELOMPOK.map((k) => <option key={k}>{k}</option>)}</select>
+          </label>
+          <label>Satuan<input value={form.satuan} onChange={(e) => set({ satuan: e.target.value })} placeholder="mis. box / pcs" /></label>
+          <label>Sub-kategori<input value={form.subKategori} onChange={(e) => set({ subKategori: e.target.value })} placeholder="opsional" /></label>
+        </div>
+        <div className="bsave">
+          <button className="btn ghost" onClick={onClose}>Batal</button>
+          <button className="btn" disabled={busy || !form.nama.trim()} onClick={submit}>{busy ? 'Menyimpan…' : 'Tambah'}</button>
+        </div>
+      </div>
+    </div>
   )
 }
 

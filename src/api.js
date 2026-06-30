@@ -701,6 +701,15 @@ export async function deleteMaster({ user, kode }) {
   return { deleted: true, kode }
 }
 
+// Tambah item master cepat dari layar Opname — boleh logistik & admin.
+export async function addMasterItem({ user, item = {} }) {
+  await requireRole(user, ['logistik']) // admin otomatis lolos
+  if (!item.nama || !item.nama.trim() || !item.kelompok) throw new Error('Nama & kelompok wajib.')
+  const kode = await createMasterItem(item.kelompok, { ...item, nama: item.nama.trim() })
+  logActivity(user, 'Tambah Item (Opname)', kode + ' ' + item.nama.trim())
+  return { kode, nama: item.nama.trim(), kelompok: item.kelompok }
+}
+
 export async function saveUser({ user, staf = {} }) {
   await requireAdmin(user)
   if (!staf.nama) throw new Error('Nama staf wajib.')
