@@ -187,6 +187,7 @@ export default function Belanja({ user, today, onToast, onChanged }) {
 
 function NotaRow({ n, user, today, masterList, keywords, onToast, onChanged }) {
   const [openFinal, setOpenFinal] = useState(false)
+  const [openEdit, setOpenEdit] = useState(false)
   const [busy, setBusy] = useState(false)
   const [va, setVa] = useState(n.noVA || '')
 
@@ -247,6 +248,11 @@ function NotaRow({ n, user, today, masterList, keywords, onToast, onChanged }) {
 
       {/* aksi sesuai status + peran */}
       <div className="nota-actions">
+        {n.status === 'Dipesan' && can(user, 'logistik') && (
+          <button className="btn ghost sm" disabled={busy} onClick={() => setOpenEdit((v) => !v)}>
+            {openEdit ? 'Batal Edit' : '✏️ Edit Belanja'}
+          </button>
+        )}
         {n.status === 'Dipesan' && can(user, 'bendahara') && (
           <>
             <input className="va-inline" placeholder="No. VA (opsional)" value={va} onChange={(e) => setVa(e.target.value)} />
@@ -272,10 +278,112 @@ function NotaRow({ n, user, today, masterList, keywords, onToast, onChanged }) {
         {n.status === 'Diterima' && !can(user, 'logistik') && <span className="muted sm">menunggu logistik memasukkan ke stok</span>}
       </div>
 
+      {openEdit && n.status === 'Dipesan' && can(user, 'logistik') && (
+        <EditBelanja n={n} user={user} onToast={onToast}
+          onDone={() => { setOpenEdit(false); onChanged() }} />
+      )}
+
       {openFinal && n.status === 'Diterima' && can(user, 'logistik') && (
         <Finalisasi n={n} user={user} masterList={masterList} keywords={keywords}
           onToast={onToast} onDone={() => { setOpenFinal(false); onChanged() }} />
       )}
+    </div>
+  )
+}
+
+// Edit nota berstatus Dipesan (logistik & admin) — mis. No. VA kedaluwarsa
+// dalam 24 jam sehingga pesanan dibuat ulang dan VA/nominal berubah.
+function EditBelanja({ n, user, onToast, onDone }) {
+  const [tanggalPesan, setTanggalPesan] = useState(n.tanggalPesan || '')
+  const [sumber, setSumber] = useState(n.sumber || '')
+  const [supplier, setSupplier] = useState(n.supplier || '')
+  const [noVA, setNoVA] = useState(n.noVA || '')
+  const [pengiriman, setPengiriman] = useState(n.pengiriman || '')
+  const [diskonPengiriman, setDiskonPengiriman] = useState(n.diskonPengiriman || '')
+  const [voucherShopee, setVoucherShopee] = useState(n.voucherShopee || '')
+  const [voucherToko, setVoucherToko] = useState(n.voucherToko || '')
+  const [biayaLayanan, setBiayaLayanan] = useState(n.biayaLayanan || '')
+  const [rows, setRows] = useState(() => n.items.map((it) => ({
+    id: Math.random().toString(36).slice(2), nama: it.nama, qty: String(it.qty), hargaSatuan: String(it.hargaSatuan),
+  })))
+  const [busy, setBusy] = useState(false)
+
+  const setRow = (id, patch) => setRows((p) => p.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+  const addRow = () => setRows((p) => [...p, newRow()])
+  const delRow = (id) => setRows((p) => (p.length > 1 ? p.filter((r) => r.id !== id) : p))
+
+  const calc = useMemo(() => {
+    const sumSub = rows.reduce((a, r) => a + (Number(r.qty) || 0) * (Number(r.hargaSatuan) || 0), 0)
+    const net = (Number(pengiriman) || 0) + (Number(biayaLayanan) || 0)
+      - (Number(diskonPengiriman) || 0) - (Number(voucherShopee) || 0) - (Number(voucherToko) || 0)
+    return { sumSub, net, total: sumSub + net }
+  }, [rows, pengiriman, diskonPengiriman, voucherShopee, voucherToko, biayaLayanan])
+
+  const validRows = rows.filter((r) => r.nama.trim() && Number(r.qty) > 0)
+  const canSave = validRows.length > 0 && calc.sumSub > 0 && !busy
+
+  async function submit() {
+    if (!canSave) return
+    setBusy(true)
+    try {
+      const items = validRows.map((r) => ({ nama: r.nama.trim(), qty: Number(r.qty), hargaSatuan: Number(r.hargaSatuan) || 0 }))
+      const nota = {
+        tanggalPesan, sumber, supplier, noVA,
+        pengiriman: Number(pengiriman) || 0, diskonPengiriman: Number(diskonPengiriman) || 0,
+        voucherShopee: Number(voucherShopee) || 0, voucherToko: Number(voucherToko) || 0,
+        biayaLayanan: Number(biayaLayanan) || 0,
+      }
+      const res = await api.updateBelanja({ idBelanja: n.idBelanja, nota, items, user: user.nama })
+      onToast('ok', `Belanja diperbarui (${res.items} item, ${rupiah(res.totalNota)}) — tetap Dipesan.`)
+      onDone()
+    } catch (e) { onToast('err', e.message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="finalisasi">
+      <div className="fin-head">Edit belanja — masih Dipesan, belum dibayar bendahara</div>
+
+      <div className="bform belanja-head">
+        <label>Tanggal Pesan<input type="date" value={tanggalPesan} onChange={(e) => setTanggalPesan(e.target.value)} /></label>
+        <label>No. VA Pembayaran<input placeholder="VA baru bila yang lama expired" value={noVA} onChange={(e) => setNoVA(e.target.value)} /></label>
+        <label>Sumber / No. Pesanan<input placeholder="mis. Shopee 24061..." value={sumber} onChange={(e) => setSumber(e.target.value)} /></label>
+        <label>Supplier / Toko<input placeholder="nama toko" value={supplier} onChange={(e) => setSupplier(e.target.value)} /></label>
+      </div>
+
+      <div className="bitems">
+        {rows.map((r, i) => (
+          <div className="bitem" key={r.id}>
+            <div className="bitem-main">
+              <input className="bi-nama" placeholder={`Nama barang #${i + 1}`} value={r.nama}
+                onChange={(e) => setRow(r.id, { nama: e.target.value })} />
+              <input className="bi-qty" type="number" min="0" inputMode="numeric" placeholder="qty" value={r.qty}
+                onChange={(e) => setRow(r.id, { qty: e.target.value })} />
+              <input className="bi-harga" type="number" min="0" inputMode="numeric" placeholder="harga satuan" value={r.hargaSatuan}
+                onChange={(e) => setRow(r.id, { hargaSatuan: e.target.value })} />
+              <button className="bi-del" title="Hapus baris" onClick={() => delRow(r.id)}>✕</button>
+            </div>
+          </div>
+        ))}
+        <button className="btn ghost addrow" onClick={addRow}>+ Tambah baris</button>
+      </div>
+
+      <div className="bform shopee">
+        <label>Subtotal Pengiriman<input type="number" min="0" inputMode="numeric" placeholder="0" value={pengiriman} onChange={(e) => setPengiriman(e.target.value)} /></label>
+        <label>Diskon Pengiriman<input type="number" min="0" inputMode="numeric" placeholder="0" value={diskonPengiriman} onChange={(e) => setDiskonPengiriman(e.target.value)} /></label>
+        <label>Voucher Shopee<input type="number" min="0" inputMode="numeric" placeholder="0" value={voucherShopee} onChange={(e) => setVoucherShopee(e.target.value)} /></label>
+        <label>Voucher Toko<input type="number" min="0" inputMode="numeric" placeholder="0" value={voucherToko} onChange={(e) => setVoucherToko(e.target.value)} /></label>
+        <label>Biaya Layanan<input type="number" min="0" inputMode="numeric" placeholder="0" value={biayaLayanan} onChange={(e) => setBiayaLayanan(e.target.value)} /></label>
+      </div>
+
+      <div className="btotals">
+        <div className="bt-line"><span>Subtotal Produk</span><b>{rupiah(calc.sumSub)}</b></div>
+        <div className="bt-line"><span>Biaya Bersih</span><b>{calc.net >= 0 ? '' : '− '}{rupiah(Math.abs(calc.net))}</b></div>
+        <div className="bt-line total"><span>Total Bayar</span><b>{rupiah(calc.total)}</b></div>
+      </div>
+      <div className="bsave">
+        <button className="btn ghost" onClick={onDone}>Batal</button>
+        <button className="btn" disabled={!canSave} onClick={submit}>{busy ? 'Menyimpan…' : 'Simpan Perubahan'}</button>
+      </div>
     </div>
   )
 }

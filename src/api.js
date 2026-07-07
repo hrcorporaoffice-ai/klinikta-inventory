@@ -400,7 +400,9 @@ export async function saveOpname({ kelompok, tanggal, user, lines }) {
 // ---------------------------------------------------------------------------
 // WRITE — belanja & terima
 // ---------------------------------------------------------------------------
-export async function saveBelanja({ nota = {}, items = [], user }) {
+// Hitung ulang subtotal, alokasi biaya proporsional per item, dan total nota
+// dari input composer. Dipakai saveBelanja (buat baru) dan updateBelanja (edit).
+function hitungNotaBelanja(nota, items) {
   if (!items.length) throw new Error('Tidak ada item belanja.')
   const pengiriman = num(nota.pengiriman), diskonPengiriman = num(nota.diskonPengiriman)
   const voucherShopee = num(nota.voucherShopee), voucherToko = num(nota.voucherToko)
@@ -412,9 +414,6 @@ export async function saveBelanja({ nota = {}, items = [], user }) {
 
   const netBiaya = pengiriman + biayaLayanan - diskonPengiriman - voucherShopee - voucherToko
   const totalNota = sumSub + netBiaya
-  const tglPesan = nota.tanggalPesan || todayStr()
-  const ts = Date.now()
-  const id = 'BLJ' + ts
 
   const itemsMap = {}
   let baris = 0
@@ -433,18 +432,55 @@ export async function saveBelanja({ nota = {}, items = [], user }) {
     }
   })
 
+  return { pengiriman, diskonPengiriman, voucherShopee, voucherToko, biayaLayanan, sumSub, totalNota, itemsMap, baris }
+}
+
+export async function saveBelanja({ nota = {}, items = [], user }) {
+  const c = hitungNotaBelanja(nota, items)
+  const tglPesan = nota.tanggalPesan || todayStr()
+  const ts = Date.now()
+  const id = 'BLJ' + ts
+
   const notaObj = {
     idBelanja: id, ts, tanggalPesan: tglPesan, tanggalTerima: '',
     sumber: nota.sumber || '', supplier: nota.supplier || '', noVA: nota.noVA || '',
-    subtotal: sumSub, pengiriman, diskonPengiriman, voucherShopee, voucherToko, biayaLayanan,
-    totalNota, status: 'Dipesan', fotoUrl: '', fakturUrl: '',
+    subtotal: c.sumSub, pengiriman: c.pengiriman, diskonPengiriman: c.diskonPengiriman,
+    voucherShopee: c.voucherShopee, voucherToko: c.voucherToko, biayaLayanan: c.biayaLayanan,
+    totalNota: c.totalNota, status: 'Dipesan', fotoUrl: '', fakturUrl: '',
     dipesanOleh: user || '', dibayarOleh: '', diterimaOleh: '', distokOleh: '',
-    catatan: nota.catatan || '', items: itemsMap,
+    catatan: nota.catatan || '', items: c.itemsMap,
   }
   await rdbSet('belanja/' + id, notaObj)
   mirror('mirror_belanja', belanjaToSheet(notaObj))
-  logActivity(user, 'Belanja baru', `${nota.sumber || 'tanpa sumber'} · ${baris} item · Rp${totalNota}`)
-  return { idBelanja: id, totalNota, items: baris, status: 'Dipesan' }
+  logActivity(user, 'Belanja baru', `${nota.sumber || 'tanpa sumber'} · ${c.baris} item · Rp${c.totalNota}`)
+  return { idBelanja: id, totalNota: c.totalNota, items: c.baris, status: 'Dipesan' }
+}
+
+// Edit belanja yang MASIH berstatus Dipesan — mis. No. VA kedaluwarsa (24 jam)
+// sehingga pesanan dibuat ulang dan VA/nominal berubah. Logistik & admin saja;
+// setelah bendahara menandai Dibayar, nota terkunci dari edit ini.
+export async function updateBelanja({ idBelanja, nota = {}, items = [], user }) {
+  if (!idBelanja) throw new Error('idBelanja wajib.')
+  await requireRole(user, ['logistik'])
+  const lama = await rdbGet('belanja/' + idBelanja)
+  if (!lama) throw new Error('Nota tidak ditemukan: ' + idBelanja)
+  if (lama.status !== 'Dipesan') {
+    throw new Error('Nota sudah ' + lama.status + ' — hanya belanja berstatus Dipesan yang bisa diedit.')
+  }
+
+  const c = hitungNotaBelanja(nota, items)
+  const notaObj = {
+    ...lama,
+    tanggalPesan: nota.tanggalPesan || fmtDate(lama.tanggalPesan) || todayStr(),
+    sumber: nota.sumber || '', supplier: nota.supplier || '', noVA: nota.noVA || '',
+    subtotal: c.sumSub, pengiriman: c.pengiriman, diskonPengiriman: c.diskonPengiriman,
+    voucherShopee: c.voucherShopee, voucherToko: c.voucherToko, biayaLayanan: c.biayaLayanan,
+    totalNota: c.totalNota, items: c.itemsMap,
+  }
+  await rdbSet('belanja/' + idBelanja, notaObj)
+  mirror('mirror_belanja', belanjaToSheet(notaObj))
+  logActivity(user, 'Belanja diedit', `${notaObj.sumber || idBelanja} · ${c.baris} item · Rp${c.totalNota}`)
+  return { idBelanja, totalNota: c.totalNota, items: c.baris, status: 'Dipesan' }
 }
 
 export async function updateBelanjaStatus({ idBelanja, status, user, noVA, tanggalTerima, fotoUrl }) {
