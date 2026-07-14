@@ -185,6 +185,8 @@ td.num{text-align:center}
 
 /* Riwayat nota */
 .notalist{padding:6px 0}
+.stok-section{margin-top:10px;padding-top:10px;border-top:1px dashed #dfe3e8}
+.stok-toggle{width:100%;justify-content:center}
 .nota{padding:12px 14px;border-bottom:1px solid #f0f2f5}
 .nota-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
 .nota-title{font-weight:600}

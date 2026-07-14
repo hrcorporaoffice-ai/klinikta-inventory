@@ -4,6 +4,8 @@ import { guessTarget } from '../classify.js'
 
 const rupiah = (n) => 'Rp ' + new Intl.NumberFormat('id-ID').format(Math.round(n || 0))
 const STATUS_BADGE = { Dipesan: 'warn', Dibayar: 'b', Diterima: 'b', 'Masuk Stok': 'ok' }
+// Urutan tampil riwayat: yang masih perlu tindakan di atas, Masuk Stok paling bawah.
+const STATUS_ORDER = { Dipesan: 0, Dibayar: 1, Diterima: 2, 'Masuk Stok': 3 }
 const newRow = () => ({ id: Math.random().toString(36).slice(2), nama: '', qty: '', hargaSatuan: '' })
 
 // Draft composer belanja disimpan ke localStorage agar tidak hilang saat HP memuat
@@ -52,6 +54,17 @@ export default function Belanja({ user, today, onToast, onChanged }) {
   const [listErr, setListErr] = useState('')
   const [keywords, setKeywords] = useState([])
   const [masterList, setMasterList] = useState([])
+  const [showStok, setShowStok] = useState(false) // sembunyikan yang sudah Masuk Stok
+
+  // Belanja aktif (perlu tindakan) diurut Dipesan→Dibayar→Diterima; Masuk Stok dipisah.
+  // getBelanja() sudah urut ts terbaru dulu; sort stabil menjaga urutan itu dalam tiap status.
+  const grouped = useMemo(() => {
+    if (!list) return null
+    const aktif = list.filter((n) => n.status !== 'Masuk Stok')
+      .slice().sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9))
+    const stok = list.filter((n) => n.status === 'Masuk Stok')
+    return { aktif, stok }
+  }, [list])
 
   const loadList = () => { setListErr(''); api.getBelanja().then(setList).catch((e) => setListErr(e.message)) }
   const loadMaster = () => api.getMasterAll().then(setMasterList).catch(() => {})
@@ -106,6 +119,12 @@ export default function Belanja({ user, today, onToast, onChanged }) {
     setPengiriman(''); setDiskonPengiriman(''); setVoucherShopee(''); setVoucherToko(''); setBiayaLayanan('')
     setTanggalPesan(today); clearDraft()
   }
+
+  const renderNota = (n) => (
+    <NotaRow key={n.idBelanja} n={n} user={user} today={today} masterList={masterList}
+      keywords={keywords} onToast={onToast}
+      onChanged={() => { loadList(); loadMaster(); onChanged && onChanged() }} />
+  )
 
   return (
     <div>
@@ -172,13 +191,27 @@ export default function Belanja({ user, today, onToast, onChanged }) {
         ) : list.length === 0 ? (
           <div className="state">Belum ada belanja tercatat.</div>
         ) : (
-          <div className="notalist">
-            {list.map((n) => (
-              <NotaRow key={n.idBelanja} n={n} user={user} today={today} masterList={masterList}
-                keywords={keywords} onToast={onToast}
-                onChanged={() => { loadList(); loadMaster(); onChanged && onChanged() }} />
-            ))}
-          </div>
+          <>
+            <div className="notalist">
+              {grouped.aktif.map((n) => renderNota(n))}
+              {grouped.aktif.length === 0 && (
+                <div className="muted" style={{ padding: '6px 2px' }}>Tidak ada belanja aktif — semua sudah masuk stok.</div>
+              )}
+            </div>
+
+            {grouped.stok.length > 0 && (
+              <div className="stok-section">
+                <button className="btn ghost sm stok-toggle" onClick={() => setShowStok((v) => !v)}>
+                  {showStok ? '▾' : '▸'} Sudah masuk stok ({grouped.stok.length})
+                </button>
+                {showStok && (
+                  <div className="notalist" style={{ marginTop: 8 }}>
+                    {grouped.stok.map((n) => renderNota(n))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
