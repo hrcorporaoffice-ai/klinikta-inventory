@@ -19,8 +19,8 @@ export const isConfigured = () => true
 // Konstanta (disalin dari Code.gs)
 // ---------------------------------------------------------------------------
 const KELOMPOK_PERSEDIAAN = { 'BHP Gigi': true, 'BHP Umum': true, 'Obat': true }
-const KELOMPOK_STOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes', 'ATK']
-const KODE_PREFIX = { 'BHP Gigi': 'BHPG-', 'BHP Umum': 'BHPU-', 'Obat': 'OBT-', 'Alkes': 'ALK-', 'ATK': 'ATK-' }
+const KELOMPOK_STOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes', 'ATK', 'Operasional']
+const KODE_PREFIX = { 'BHP Gigi': 'BHPG-', 'BHP Umum': 'BHPU-', 'Obat': 'OBT-', 'Alkes': 'ALK-', 'ATK': 'ATK-', 'Operasional': 'OPR-' }
 // Kelompok yang butuh Batch & Tanggal Expired saat diterima ke stok.
 const KELOMPOK_BATCH = { 'BHP Gigi': true, 'BHP Umum': true, 'Obat': true }
 const STATUS_FLOW = ['Dipesan', 'Dibayar', 'Diterima', 'Masuk Stok']
@@ -65,6 +65,7 @@ const defaultKategori = (kelompok) => {
   if (kelompok === 'BHP Umum') return 'Penjualan BHP'
   if (kelompok === 'Alkes') return 'Beban Alkes'
   if (kelompok === 'ATK') return 'Beban ATK dan Perlengkapan Kantor'
+  if (kelompok === 'Operasional') return 'Beban Operasional'
   return 'Beban Penggunaan Produk Internal'
 }
 
@@ -320,7 +321,7 @@ export async function getRekap(periode) {
   const recv = {}
   belanja.forEach((b) => { if (String(b.status) === 'Masuk Stok' && fmtDate(b.tanggalTerima).slice(0, 7) === per) recv[b.idBelanja] = b })
 
-  let totalPersediaan = 0, totalBebanAlkes = 0, totalBebanATK = 0
+  let totalPersediaan = 0, totalBebanAlkes = 0, totalBebanATK = 0, totalBebanOperasional = 0
   belanja.forEach((b) => {
     if (!recv[b.idBelanja]) return
     b.items.forEach((it) => {
@@ -328,6 +329,7 @@ export async function getRekap(periode) {
       if (KELOMPOK_PERSEDIAAN[it.kelompok]) totalPersediaan += v
       else if (String(it.kelompok) === 'Alkes') totalBebanAlkes += v
       else if (String(it.kelompok) === 'ATK') totalBebanATK += v
+      else if (String(it.kelompok) === 'Operasional') totalBebanOperasional += v
     })
   })
 
@@ -350,7 +352,7 @@ export async function getRekap(periode) {
 
   return {
     periode: per,
-    persediaan: { totalPersediaan: Math.round(totalPersediaan), totalBebanAlkes: Math.round(totalBebanAlkes), totalBebanATK: Math.round(totalBebanATK) },
+    persediaan: { totalPersediaan: Math.round(totalPersediaan), totalBebanAlkes: Math.round(totalBebanAlkes), totalBebanATK: Math.round(totalBebanATK), totalBebanOperasional: Math.round(totalBebanOperasional) },
     antrianAset: aset,
     hppPemakaian: Object.keys(hpp).map((k) => ({ kelompok: k, total: Math.round(hpp[k]) })),
     selisihOpname: selisih,
@@ -495,6 +497,8 @@ export async function updateBelanjaStatus({ idBelanja, status, user, noVA, tangg
     await rdbUpdate('belanja/' + idBelanja, upd)
   } else if (status === 'Diterima') {
     await requireRole(user, ['penerima'])
+    // Wajib foto barang terupload dulu — bukti fisik penerimaan sebelum status Diterima.
+    if (!fotoUrl && !nota.fotoUrl) throw new Error('Foto barang wajib diunggah dulu sebelum menandai Diterima.')
     const upd = { status: 'Diterima', diterimaOleh: user || '', tanggalTerima: tanggalTerima || todayStr() }
     if (fotoUrl) upd.fotoUrl = fotoUrl
     await rdbUpdate('belanja/' + idBelanja, upd)
@@ -521,7 +525,7 @@ export async function finalizeBelanja({ idBelanja, mappings = [], fakturUrl, use
     } else {
       if (KELOMPOK_STOK.indexOf(target) < 0) throw new Error('Tujuan tidak valid: ' + target)
       kelompok = target
-      klas = (target === 'Obat') ? 'Obat' : (target === 'Alkes') ? 'Alkes' : (target === 'ATK') ? 'ATK' : 'BHP'
+      klas = (target === 'Obat') ? 'Obat' : (target === 'Alkes') ? 'Alkes' : (target === 'ATK') ? 'ATK' : (target === 'Operasional') ? 'Operasional' : 'BHP'
       if (mp.kodeMaster) kode = mp.kodeMaster
       else if (mp.newItem && mp.newItem.nama) kode = await createMasterItem(target, mp.newItem)
       else throw new Error('Baris ' + mp.baris + ' belum dipetakan ke item master.')

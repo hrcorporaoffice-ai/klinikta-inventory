@@ -262,9 +262,10 @@ function NotaRow({ n, user, today, masterList, keywords, onToast, onChanged }) {
         {n.status === 'Dibayar' && can(user, 'penerima') && (
           <>
             <label className="btn ghost sm filelabel">
-              📷 Foto barang<input type="file" accept="image/*" capture="environment" hidden onChange={(e) => uploadFoto(e.target.files[0])} />
+              📷 {n.fotoUrl ? 'Ganti foto' : 'Foto barang'}<input type="file" accept="image/*" capture="environment" hidden onChange={(e) => uploadFoto(e.target.files[0])} />
             </label>
-            <button className="btn sm" disabled={busy} onClick={() => mark('Diterima')}>Tandai Diterima</button>
+            <button className="btn sm" disabled={busy || !n.fotoUrl} title={n.fotoUrl ? '' : 'Unggah foto barang dulu'} onClick={() => mark('Diterima')}>Tandai Diterima</button>
+            {!n.fotoUrl && <span className="muted sm">📷 unggah foto barang dulu untuk bisa menandai Diterima</span>}
           </>
         )}
         {n.status === 'Diterima' && can(user, 'logistik') && (
@@ -388,8 +389,8 @@ function EditBelanja({ n, user, onToast, onDone }) {
   )
 }
 
-const TARGETS = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes', 'ATK', 'Aset']
-const TARGET_LABEL = { ATK: 'ATK & Perlengkapan Kantor' }
+const TARGETS = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes', 'ATK', 'Operasional', 'Aset']
+const TARGET_LABEL = { ATK: 'ATK & Perlengkapan Kantor', Operasional: 'Operasional (kebersihan/rumah tangga)' }
 // BHP & Obat butuh Batch + Tanggal Expired saat diterima.
 const needsBatch = (t) => t === 'BHP Gigi' || t === 'BHP Umum' || t === 'Obat'
 

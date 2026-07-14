@@ -3,7 +3,7 @@
 //
 // Patokan: masa manfaat > 1 tahun → kemungkinan Aset (ketentuan pajak), bukan semata harga.
 
-export const KLASIFIKASI = ['BHP', 'Obat', 'Alkes', 'ATK', 'Aset']
+export const KLASIFIKASI = ['BHP', 'Obat', 'Alkes', 'ATK', 'Operasional', 'Aset']
 
 // ATK & perlengkapan kantor → beban langsung.
 const ATK = [
@@ -11,8 +11,16 @@ const ATK = [
   'stapler', 'staples', 'klip', 'binder', 'buku', 'nota', 'kwitansi', 'stempel', 'tinta',
   'toner', 'cartridge', 'lakban', 'selotip', 'gunting kertas', 'penggaris', 'lem',
   'sticky note', 'post it', 'ordner', 'tipe x', 'tip ex', 'correction', 'baterai', 'batere',
-  'kalkulator', 'atk', 'alat tulis', 'kabel', 'colokan', 'terminal listrik', 'galon',
-  'tisu', 'sabun', 'pembersih', 'pewangi', 'sapu', 'pel', 'kemoceng', 'tempat sampah',
+  'kalkulator', 'atk', 'alat tulis', 'kabel', 'colokan', 'terminal listrik',
+]
+
+// Kebersihan & rumah tangga (parfum ruangan, kresek sampah, sabun) → beban langsung Operasional.
+const OPERASIONAL = [
+  'kresek', 'kantong sampah', 'plastik sampah', 'trash bag', 'tempat sampah', 'tong sampah',
+  'parfum', 'pengharum', 'pewangi', 'air freshener', 'freshener', 'kamper', 'kapur barus',
+  'tisu', 'tissue', 'sabun', 'hand soap', 'handsoap', 'deterjen', 'detergen', 'pembersih',
+  'karbol', 'wipol', 'pembersih lantai', 'pel', 'sapu', 'kemoceng', 'sikat wc', 'lap', 'kanebo',
+  'spons cuci', 'galon', 'air mineral', 'aqua', 'kopi', 'gula', 'teh',
 ]
 
 // Dipakai bertahun-tahun, nilai besar → Aset.
@@ -27,7 +35,8 @@ const ASET = [
 
 // Dipakai ulang, awet, nilai kecil → Alkes.
 const ALKES = [
-  'pinset', 'sonde', 'ekskavator', 'excavator', 'kaca mulut', 'tang', 'forceps', 'forcep',
+  'pinset', 'sonde', 'ekskavator', 'excavator', 'kaca mulut',
+  'tang cabut', 'tang gigi', 'tang ekstraksi', 'tang bein', 'forceps', 'forcep',
   'plastis', 'burnisher', 'spatula', 'bowl', 'tray', 'bak instrumen', 'nierbeken', 'bengkok',
   'gunting', 'scissor', 'needle holder', 'cheek retractor', 'retractor', 'cement stopper',
   'bur set', 'diamond bur', 'matrix retainer', 'cotton plier', 'elevator', 'cryer', 'bein',
@@ -53,12 +62,13 @@ export function guessKlasifikasi(nama) {
   if (hit(nama, ASET)) return 'Aset'
   if (hit(nama, ALKES)) return 'Alkes'
   if (hit(nama, ATK)) return 'ATK'
+  if (hit(nama, OPERASIONAL)) return 'Operasional'
   if (hit(nama, OBAT)) return 'Obat'
   return 'BHP'
 }
 
 // Tebak dari kata kunci yang dikelola admin (list {klasifikasi, keyword}).
-// Prioritas: Aset > Alkes > ATK > Obat. Fallback ke guess statis.
+// Prioritas: Aset > Alkes > ATK > Operasional > Obat. Fallback ke guess statis.
 export function guessFromKeywords(nama, keywords) {
   if (!nama) return 'BHP'
   if (!keywords || !keywords.length) return guessKlasifikasi(nama)
@@ -67,17 +77,19 @@ export function guessFromKeywords(nama, keywords) {
   if (has('Aset')) return 'Aset'
   if (has('Alkes')) return 'Alkes'
   if (has('ATK')) return 'ATK'
+  if (has('Operasional')) return 'Operasional'
   if (has('Obat')) return 'Obat'
   return guessKlasifikasi(nama)
 }
 
-// Tebakan kelompok target saat finalisasi (logistik): Aset/Alkes/ATK -> kelompok itu,
+// Tebakan kelompok target saat finalisasi (logistik): Aset/Alkes/ATK/Operasional -> kelompok itu,
 // Obat -> Obat, sisanya default BHP Gigi (mayoritas item gigi).
 export function guessTarget(nama, keywords) {
   const klas = guessFromKeywords(nama, keywords)
   if (klas === 'Aset') return 'Aset'
   if (klas === 'Alkes') return 'Alkes'
   if (klas === 'ATK') return 'ATK'
+  if (klas === 'Operasional') return 'Operasional'
   if (klas === 'Obat') return 'Obat'
   return 'BHP Gigi'
 }
@@ -86,5 +98,6 @@ export const PANDUAN_KLAS = [
   ['BHP / Obat', 'Habis dipakai (komposit, kapas, obat, jarum). → menambah stok'],
   ['Alkes', 'Dipakai ulang, awet tapi nilai kecil (bur set, pinset). → beban langsung'],
   ['ATK & Perlengkapan', 'Alat tulis & perlengkapan kantor (kertas, pulpen, tinta). → beban langsung'],
+  ['Operasional', 'Kebersihan & rumah tangga (parfum ruangan, kresek sampah, sabun). → beban langsung'],
   ['Aset', 'Dipakai bertahun-tahun, nilai besar (scaler, light cure, dental unit). → Daftar Aset'],
 ]
