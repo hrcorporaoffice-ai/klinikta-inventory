@@ -485,6 +485,23 @@ export async function updateBelanja({ idBelanja, nota = {}, items = [], user }) 
   return { idBelanja, totalNota: c.totalNota, items: c.baris, status: 'Dipesan' }
 }
 
+// Hapus nota — ADMIN saja, dan HANYA yang masih berstatus Dipesan (belum dibayar,
+// belum diterima, belum masuk stok → tak ada efek turunan: tak ada stok, item master,
+// maupun antrian aset yang terlanjur dibuat). Hapus by-id, bukan node induk.
+export async function deleteBelanja({ idBelanja, user }) {
+  if (!idBelanja) throw new Error('idBelanja wajib.')
+  await requireAdmin(user)
+  const nota = await rdbGet('belanja/' + idBelanja)
+  if (!nota) throw new Error('Nota tidak ditemukan: ' + idBelanja)
+  if (nota.status !== 'Dipesan') {
+    throw new Error('Nota sudah ' + nota.status + ' — hanya belanja berstatus Dipesan yang bisa dihapus.')
+  }
+  await rdbRemove('belanja/' + idBelanja)
+  mirror('mirror_belanja_delete', { idBelanja })
+  logActivity(user, 'Hapus Belanja', `${nota.sumber || nota.supplier || idBelanja} · Rp${num(nota.totalNota)}`)
+  return { ok: true, idBelanja }
+}
+
 export async function updateBelanjaStatus({ idBelanja, status, user, noVA, tanggalTerima, fotoUrl }) {
   if (!idBelanja) throw new Error('idBelanja wajib.')
   const nota = await rdbGet('belanja/' + idBelanja)

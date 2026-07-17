@@ -244,6 +244,16 @@ function NotaRow({ n, user, today, masterList, keywords, onToast, onChanged }) {
     } catch (e) { onToast('err', e.message) } finally { setBusy(false) }
   }
 
+  async function hapus() {
+    if (!window.confirm(`Hapus belanja "${n.sumber || n.supplier || n.idBelanja}" (Rp ${new Intl.NumberFormat('id-ID').format(Math.round(n.totalNota || 0))})?\n\nTindakan ini permanen dan hanya untuk nota yang masih Dipesan.`)) return
+    setBusy(true)
+    try {
+      await api.deleteBelanja({ idBelanja: n.idBelanja, user: user.nama })
+      onToast('ok', 'Belanja dihapus.')
+      onChanged()
+    } catch (e) { onToast('err', e.message) } finally { setBusy(false) }
+  }
+
   return (
     <div className="nota">
       <div className="nota-top">
@@ -285,6 +295,9 @@ function NotaRow({ n, user, today, masterList, keywords, onToast, onChanged }) {
           <button className="btn ghost sm" disabled={busy} onClick={() => setOpenEdit((v) => !v)}>
             {openEdit ? 'Batal Edit' : '✏️ Edit Belanja'}
           </button>
+        )}
+        {n.status === 'Dipesan' && can(user, 'admin') && (
+          <button className="btn danger sm" disabled={busy} onClick={hapus}>🗑️ Hapus</button>
         )}
         {n.status === 'Dipesan' && can(user, 'bendahara') && (
           <>

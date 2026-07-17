@@ -220,6 +220,7 @@ function doPost(e) {
         case 'mirror_pakai':   rm = mirrorAppend_(SHEETS.pakai, body.rows); break;
         case 'mirror_opname':  rm = mirrorAppend_(SHEETS.opname, body.rows); break;
         case 'mirror_belanja': rm = mirrorBelanja_(body.nota, body.items); break;
+        case 'mirror_belanja_delete': rm = mirrorBelanjaDelete_(body.idBelanja); break;
         case 'mirror_antrian': rm = mirrorUpsert_(SHEETS.antrianAset, 'idAset', body.rows); break;
         case 'mirror_master':  rm = { written: clearAndWrite_(SHEETS.master, body.rows) }; break;
         case 'mirror_full':    rm = { written: mirrorFull_(body.sheet, body.rows) }; break;
@@ -744,6 +745,25 @@ function mirrorBelanja_(nota, items) {
   }
   SpreadsheetApp.flush();
   return { idBelanja: nota.idBelanja, items: (items || []).length };
+}
+
+// Hapus satu nota belanja dari sheet: baris nota + semua baris itemnya.
+// Dipakai saat admin menghapus belanja berstatus Dipesan di app.
+function mirrorBelanjaDelete_(idBelanja) {
+  if (!idBelanja) throw new Error('idBelanja wajib.');
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var shB = ss.getSheetByName(SHEETS.belanja);
+  var rowIdx = findRow_(shB, 'idBelanja', idBelanja);
+  if (rowIdx > 0) shB.deleteRow(rowIdx);
+
+  var shI = ss.getSheetByName(SHEETS.itemBelanja);
+  var dataI = shI.getDataRange().getValues();
+  var cId = dataI[0].indexOf('idBelanja');
+  for (var i = dataI.length - 1; i >= 1; i--) {
+    if (String(dataI[i][cId]) === String(idBelanja)) shI.deleteRow(i + 1);
+  }
+  SpreadsheetApp.flush();
+  return { idBelanja: idBelanja, deleted: true };
 }
 
 // Sinkron penuh: kosongkan tiap sheet (sisakan header) lalu tulis ulang dari data
