@@ -28,6 +28,18 @@ function fileToBase64(file) {
   })
 }
 
+// Nama file bukti di Drive: <Foto|Faktur>_<pemesan>_<tanggal pesan>_<no pesanan>.<ext>
+// mis. "Foto_Salmawati_2026-07-04_Shopee-260704RK8F95AU.jpg"
+function buildBuktiName(kind, n, file) {
+  const m = /\.([a-z0-9]+)$/i.exec(file.name || '')
+  const mt = (file.type || '').toLowerCase()
+  const ext = m ? m[1].toLowerCase() : mt.includes('pdf') ? 'pdf' : mt.includes('png') ? 'png' : 'jpg'
+  const clean = (s) => String(s || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const label = kind === 'faktur' ? 'Faktur' : 'Foto'
+  const parts = [label, clean(n.dipesanOleh) || 'tanpa-nama', n.tanggalPesan || '', clean(n.sumber) || n.idBelanja]
+  return parts.filter(Boolean).join('_').replace(/\s+/g, '-') + '.' + ext
+}
+
 export default function Belanja({ user, today, onToast, onChanged }) {
   // Composer nota — inisialisasi dari draft tersimpan (jika ada) agar tahan reload HP.
   const draft0 = useMemo(loadDraft, [])
@@ -238,7 +250,7 @@ function NotaRow({ n, user, today, masterList, keywords, onToast, onChanged }) {
     setBusy(true)
     try {
       const dataBase64 = await fileToBase64(file)
-      await api.uploadFile({ idBelanja: n.idBelanja, kind: 'foto', filename: file.name, mimeType: file.type, dataBase64, user: user.nama })
+      await api.uploadFile({ idBelanja: n.idBelanja, kind: 'foto', filename: buildBuktiName('foto', n, file), mimeType: file.type, dataBase64, user: user.nama })
       onToast('ok', 'Foto barang terunggah.')
       onChanged()
     } catch (e) { onToast('err', e.message) } finally { setBusy(false) }
@@ -464,7 +476,7 @@ function Finalisasi({ n, user, masterList, keywords, onToast, onDone }) {
       let fakturUrl = ''
       if (faktur) {
         const dataBase64 = await fileToBase64(faktur)
-        const up = await api.uploadFile({ idBelanja: n.idBelanja, kind: 'faktur', filename: faktur.name, mimeType: faktur.type, dataBase64, user: user.nama })
+        const up = await api.uploadFile({ idBelanja: n.idBelanja, kind: 'faktur', filename: buildBuktiName('faktur', n, faktur), mimeType: faktur.type, dataBase64, user: user.nama })
         fakturUrl = up.url
       }
       const mappings = maps.map((m) => ({
