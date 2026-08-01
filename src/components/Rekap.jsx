@@ -52,6 +52,18 @@ export default function Rekap({ user, today, onToast }) {
             label="Total Persediaan BHP + Obat"
             akun="Akoontan: Pengeluaran · kategori Persediaan"
             value={data.persediaan.totalPersediaan} onCopy={copy} />
+          {data.persediaan.perKelompok.map((p) => (
+            <RekapRow key={p.kelompok} small label={p.kelompok} value={p.total} onCopy={copy} />
+          ))}
+
+          <RekapRow
+            label="Nilai Persediaan Akhir (stok tersisa)"
+            akun={`Nilai stok BHP + Obat per ${data.hingga} — untuk neraca, bukan pengeluaran`}
+            value={data.persediaan.totalAkhir} onCopy={copy} />
+          {data.persediaan.akhirPerKelompok.map((p) => (
+            <RekapRow key={p.kelompok} small label={p.kelompok} value={p.total} onCopy={copy} />
+          ))}
+
           <RekapRow
             label="Total Beban Alkes"
             akun="Akoontan: Pengeluaran · kategori Beban Alkes"
@@ -81,13 +93,27 @@ export default function Rekap({ user, today, onToast }) {
           </div>
 
           {/* Bagian 2 */}
-          <h3 className="rekap-h">2 · Dari Pemakaian (HPP)</h3>
-          <p className="rekap-sub">→ Akoontan: Pemasukan · harga 0 · kategori "Beban Penggunaan Produk Internal"</p>
-          {data.hppPemakaian.length === 0 ? (
-            <div className="muted" style={{ padding: '6px 0' }}>Belum ada pemakaian di periode ini.</div>
-          ) : data.hppPemakaian.map((h) => (
-            <RekapRow key={h.kelompok} label={`HPP ${h.kelompok}`} value={h.total} onCopy={copy} />
+          <h3 className="rekap-h">2 · Dari Pemakaian &amp; Selisih Opname (HPP)</h3>
+          <p className="rekap-sub">Nilai pemakaian + nilai selisih opname, dihitung dengan harga beli rata-rata tertimbang. Mencakup pemakaian internal maupun barang terjual.</p>
+          {data.hppPemakaian.map((h) => (
+            <RekapRow key={h.kelompok}
+              label={`HPP - ${h.kelompok}`}
+              akun={`Akoontan: kategori HPP - ${h.kelompok}`}
+              sub={`pemakaian ${rupiah(h.dariPakai)} · selisih opname ${h.dariSelisih < 0 ? '−' : '+'}${rupiah(Math.abs(h.dariSelisih))}`}
+              value={h.total} onCopy={copy} />
           ))}
+          {data.hppPemakaian.some((h) => h.stokAwal > 0) && (
+            <div className="rekap-info">
+              ℹ️ Opname periode ini mencatat <b>stok awal</b> senilai {rupiah(data.hppPemakaian.reduce((a, h) => a + h.stokAwal, 0))} (stok sistem 0 → dihitung fisik ada isinya).
+              Itu barang yang sudah ada tapi belum pernah tercatat masuk, jadi <b>tidak</b> dihitung sebagai HPP. Nilainya sudah tercermin di "Nilai Persediaan Akhir".
+            </div>
+          )}
+          {data.hppPemakaian.some((h) => h.kelebihanTakDinet > 0) && (
+            <div className="rekap-warn">
+              ⚠️ Ada kelebihan stok saat opname senilai {rupiah(data.hppPemakaian.reduce((a, h) => a + h.kelebihanTakDinet, 0))} yang <b>tidak</b> dikurangkan dari HPP.
+              Kemungkinan ada nota yang barangnya sudah datang tapi belum difinalisasi "Masuk Stok" — cek Riwayat Belanja.
+            </div>
+          )}
 
           {/* Bagian 3 */}
           <h3 className="rekap-h">3 · Dari Opname (selisih)</h3>
@@ -101,7 +127,7 @@ export default function Rekap({ user, today, onToast }) {
                   <b className={s.selisih < 0 ? 'neg' : 'pos'}>{s.selisih > 0 ? '+' : ''}{s.selisih}</b>
                 </div>
               ))}
-              <div className="muted" style={{ marginTop: 6 }}>Selisih negatif = stok fisik kurang dari sistem (kemungkinan kebocoran/salah catat).</div>
+              <div className="muted" style={{ marginTop: 6 }}>Selisih negatif = stok fisik kurang dari sistem (kemungkinan kebocoran/salah catat). Nilai rupiahnya sudah ikut diperhitungkan di HPP bagian 2 — daftar ini hanya rincian jumlahnya.</div>
             </div>
           )}
 
@@ -200,12 +226,13 @@ function OpnameEditRow({ r, busy, onSave, onDelete }) {
   )
 }
 
-function RekapRow({ label, akun, value, onCopy }) {
+function RekapRow({ label, akun, sub, value, onCopy, small }) {
   return (
-    <div className="rekap-row">
+    <div className={'rekap-row' + (small ? ' sm' : '')}>
       <div className="rr-left">
         <div className="rr-label">{label}</div>
         {akun && <div className="rr-akun">{akun}</div>}
+        {sub && <div className="rr-sub">{sub}</div>}
       </div>
       <div className="rr-right">
         <span className="rr-val">{rupiah(value)}</span>
