@@ -340,6 +340,7 @@ export async function getBelanja() {
 
 export async function getRekap(periode) {
   const per = periode || todayStr().slice(0, 7)
+  const hingga = endOfMonth(per)
   const belanja = await belanjaArray()
   const masterObj = await masterByKode()
 
@@ -372,6 +373,22 @@ export async function getRekap(periode) {
   const costOf = (kode) => (avg[kode] != null) ? avg[kode] : (masterObj[kode] ? num(masterObj[kode].hargaAcuan) : 0)
   const kelompokOf = (r) => r.kelompok || (masterObj[r.kode] ? masterObj[r.kode].kelompok : 'Lainnya')
 
+  // Sejak Juli 2026 SEMUA barang masuk lewat menu Belanja. Jadi saat sebuah item
+  // pertama kali diopname, kelebihan fisik atas catatan sistem = stok yang sudah ada
+  // sebelum mekanisme belanja diberlakukan ("stok awal") — bukan koreksi pemakaian.
+  // Opname ke-2 dst: stok sudah terjangkar, selisih positif di situ variance sungguhan.
+  const opnamePertama = {}
+  opnameAll.forEach((o) => {
+    const t = fmtDate(o.tanggal)
+    if (!o.kode || !t) return
+    const ada = opnamePertama[o.kode]
+    if (!ada || t < ada.tanggal || (t === ada.tanggal && num(o.ts) < ada.ts)) opnamePertama[o.kode] = { tanggal: t, ts: num(o.ts) }
+  })
+  const isOpnamePertama = (o) => {
+    const p = opnamePertama[o.kode]
+    return !!p && fmtDate(o.tanggal) === p.tanggal && num(o.ts) === p.ts
+  }
+
   // HPP = nilai pemakaian + nilai selisih opname (keduanya pakai harga rata-rata tertimbang).
   // Selisih opname aman digabung: stokSistem saat opname sudah memperhitungkan pemakaian
   // tercatat, jadi selisih murni konsumsi/susut yang BELUM tercatat (tidak dobel hitung).
@@ -383,10 +400,8 @@ export async function getRekap(periode) {
   })
   opnameAll.forEach((o) => {
     if (fmtDate(o.tanggal).slice(0, 7) !== per || !o.kode) return
-    // Opname perdana: stok sistem 0 lalu dihitung fisik ada isinya = PENCATATAN STOK AWAL
-    // (barang sudah ada di klinik tapi belum pernah tercatat masuk), bukan koreksi
-    // pemakaian. Dipisah agar tidak mengurangi HPP.
-    if (num(o.selisih) > 0 && num(o.stokSistem) === 0) stokAwalQty[o.kode] = (stokAwalQty[o.kode] || 0) + num(o.selisih)
+    // Kelebihan fisik saat item PERTAMA kali diopname = stok awal (dipisah dari HPP).
+    if (num(o.selisih) > 0 && isOpnamePertama(o)) stokAwalQty[o.kode] = (stokAwalQty[o.kode] || 0) + num(o.selisih)
     else selisihQty[o.kode] = (selisihQty[o.kode] || 0) + num(o.selisih)
     if (!kelOf[o.kode]) kelOf[o.kode] = kelompokOf(o)
   })
@@ -415,10 +430,27 @@ export async function getRekap(periode) {
     .filter((o) => fmtDate(o.tanggal).slice(0, 7) === per && num(o.selisih) !== 0)
     .map((o) => ({ kode: o.kode, nama: o.nama, kelompok: o.kelompok, selisih: num(o.selisih), tanggal: fmtDate(o.tanggal) }))
 
+  // Stok awal KUMULATIF s/d akhir periode — ditemukan bertahap seiring tiap item
+  // diopname pertama kali. Dipakai untuk jurnal koreksi (Dr Persediaan / Cr Beban).
+  const stokAwalKum = {}
+  opnameAll.forEach((o) => {
+    const t = fmtDate(o.tanggal)
+    if (!o.kode || !t || t > hingga) return
+    if (num(o.selisih) <= 0 || !isOpnamePertama(o)) return
+    const g = GRUP_HPP[kelompokOf(o)] || kelompokOf(o)
+    stokAwalKum[g] = (stokAwalKum[g] || 0) + num(o.selisih) * costOf(o.kode)
+  })
+  // Item persediaan aktif yang belum pernah diopname → stok lamanya belum terhitung.
+  let itemBelumOpname = 0
+  Object.values(masterObj).forEach((m) => {
+    if (!m.kode || !KELOMPOK_PERSEDIAAN[m.kelompok]) return
+    if (m.aktif === false || String(m.aktif) === 'false') return
+    if (!opnamePertama[m.kode]) itemBelumOpname++
+  })
+
   // Nilai persediaan akhir periode = stok tersisa per item × harga rata-rata tertimbang.
   // Stok dihitung "per akhir bulan": jangkar opname terakhir s/d tanggal itu, lalu
   // ditambah masuk & dikurangi pakai sesudahnya (pola sama dengan getState).
-  const hingga = endOfMonth(per)
   const masukByK = rowsByKode(receivedMasuk(belanja))
   const pakaiByK = rowsByKode(pakaiAll)
   const opTerakhir = {}
@@ -454,6 +486,11 @@ export async function getRekap(periode) {
       totalBebanAlkes: Math.round(totalBebanAlkes),
       totalBebanATK: Math.round(totalBebanATK),
       totalBebanOperasional: Math.round(totalBebanOperasional),
+    },
+    stokAwal: {
+      perGrup: ['BHP', 'Obat'].map((g) => ({ kelompok: g, total: Math.round(stokAwalKum[g] || 0) })),
+      total: Math.round(Object.values(stokAwalKum).reduce((a, x) => a + x, 0)),
+      itemBelumOpname,
     },
     antrianAset: aset,
     hppPemakaian: Object.keys(hpp)

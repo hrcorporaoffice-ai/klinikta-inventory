@@ -92,6 +92,26 @@ export default function Rekap({ user, today, onToast }) {
             ))}
           </div>
 
+          {/* Bagian 1b — stok awal untuk jurnal koreksi */}
+          <h3 className="rekap-h">1b · Stok Awal sebelum mekanisme belanja</h3>
+          <p className="rekap-sub">
+            Kelebihan fisik saat item pertama kali diopname = barang yang sudah ada sebelum belanja dicatat di app.
+            Angka kumulatif s/d {data.hingga}. <b>Bukan beban</b> — ini penyesuaian aset persediaan (Dr Persediaan / Cr Beban pembelian periode lalu).
+          </p>
+          <RekapRow
+            label="Total Stok Awal (BHP + Obat)"
+            akun="Untuk jurnal koreksi satu kali — bukan angka bulanan"
+            value={data.stokAwal.total} onCopy={copy} />
+          {data.stokAwal.perGrup.map((g) => (
+            <RekapRow key={g.kelompok} small label={`Stok Awal - ${g.kelompok}`} value={g.total} onCopy={copy} />
+          ))}
+          {data.stokAwal.itemBelumOpname > 0 && (
+            <div className="rekap-warn">
+              ⚠️ <b>{data.stokAwal.itemBelumOpname} item persediaan belum pernah diopname</b> — stok lamanya belum terhitung, jadi angka di atas <b>belum final</b>.
+              Opname item-item itu dulu sebelum membuat jurnal koreksi.
+            </div>
+          )}
+
           {/* Bagian 2 */}
           <h3 className="rekap-h">2 · Dari Pemakaian &amp; Selisih Opname (HPP)</h3>
           <p className="rekap-sub">Nilai pemakaian + nilai selisih opname, dihitung dengan harga beli rata-rata tertimbang. Mencakup pemakaian internal maupun barang terjual.</p>
@@ -104,8 +124,8 @@ export default function Rekap({ user, today, onToast }) {
           ))}
           {data.hppPemakaian.some((h) => h.stokAwal > 0) && (
             <div className="rekap-info">
-              ℹ️ Opname periode ini mencatat <b>stok awal</b> senilai {rupiah(data.hppPemakaian.reduce((a, h) => a + h.stokAwal, 0))} (stok sistem 0 → dihitung fisik ada isinya).
-              Itu barang yang sudah ada tapi belum pernah tercatat masuk, jadi <b>tidak</b> dihitung sebagai HPP. Nilainya sudah tercermin di "Nilai Persediaan Akhir".
+              ℹ️ Periode ini ditemukan <b>stok awal</b> senilai {rupiah(data.hppPemakaian.reduce((a, h) => a + h.stokAwal, 0))} dari item yang baru pertama kali diopname —
+              <b> tidak</b> dihitung sebagai HPP. Lihat bagian 1b.
             </div>
           )}
           {data.hppPemakaian.some((h) => h.kelebihanTakDinet > 0) && (
