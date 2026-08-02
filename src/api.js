@@ -395,7 +395,7 @@ export async function getRekap(periode) {
   const hpp = {}
   const bucket = (g) => (hpp[g] = hpp[g] || { dariPakai: 0, dariSusut: 0 })
   bucket('BHP'); bucket('Obat') // dua baris utama selalu ada agar bisa disalin walau 0
-  const sisaBelanja = {}, sisaLuar = {}
+  const sisaBelanja = {}
   let konsumsiTakTertutup = 0
   Object.keys(eventPerKode).forEach((kode) => {
     const kel = masterObj[kode] ? masterObj[kode].kelompok : 'Lainnya'
@@ -418,24 +418,40 @@ export async function getRekap(periode) {
         else b.dariPakai += dariBelanja * cost
       })
     sisaBelanja[kode] = poolBelanja
-    sisaLuar[kode] = poolLuar
   })
 
   const selisih = opnameAll
     .filter((o) => fmtDate(o.tanggal).slice(0, 7) === per && num(o.selisih) !== 0)
     .map((o) => ({ kode: o.kode, nama: o.nama, kelompok: o.kelompok, selisih: num(o.selisih), tanggal: fmtDate(o.tanggal) }))
 
+  // Stok aktual per item per akhir periode — pola sama dengan getState: jangkar opname
+  // terakhir s/d tanggal itu, lalu tambah masuk & kurangi pakai SESUDAHNYA.
+  const masukByK = rowsByKode(receivedMasuk(belanja))
+  const pakaiByK = rowsByKode(pakaiAll)
+  const opTerakhir = {}
+  opnameAll.forEach((o) => {
+    const t = fmtDate(o.tanggal)
+    if (!o.kode || !t || t > hingga) return
+    if (!opTerakhir[o.kode] || t >= opTerakhir[o.kode].tanggal) opTerakhir[o.kode] = { tanggal: t, stokFisik: num(o.stokFisik) }
+  })
+  const stokAktual = (kode) => {
+    const op = opTerakhir[kode]
+    const sejak = op ? op.tanggal : ''
+    return (op ? op.stokFisik : 0) + sumRange(masukByK[kode], sejak, hingga) - sumRange(pakaiByK[kode], sejak, hingga)
+  }
+
   // Nilai persediaan akhir = sisa kantong BELANJA saja (rupiah).
-  // Kantong LUAR dilaporkan jumlah unit & item saja, tanpa rupiah.
+  // Jumlah stok LUAR diturunkan dari stok aktual dikurangi sisa kantong Belanja, supaya
+  // Belanja + Luar selalu ikat persis dengan stok yang ditampilkan app (tanpa rupiah).
   const akhirPerKelompok = {}, luarPerKelompok = {}
   let totalAkhir = 0, totalUnitLuar = 0, totalItemLuar = 0
-  Object.keys(sisaBelanja).forEach((kode) => {
-    const m = masterObj[kode]
-    if (!m || !KELOMPOK_PERSEDIAAN[m.kelompok]) return
-    const nilai = sisaBelanja[kode] * costOf(kode)
+  Object.values(masterObj).forEach((m) => {
+    if (!m.kode || !KELOMPOK_PERSEDIAAN[m.kelompok]) return
+    const sisaB = sisaBelanja[m.kode] || 0
+    const nilai = sisaB * costOf(m.kode)
     akhirPerKelompok[m.kelompok] = (akhirPerKelompok[m.kelompok] || 0) + nilai
     totalAkhir += nilai
-    const unit = sisaLuar[kode] || 0
+    const unit = Math.max(stokAktual(m.kode) - sisaB, 0)
     if (unit > 0) {
       const L = luarPerKelompok[m.kelompok] = luarPerKelompok[m.kelompok] || { unit: 0, item: 0 }
       L.unit += unit; L.item++

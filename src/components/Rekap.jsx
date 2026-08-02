@@ -117,9 +117,10 @@ export default function Rekap({ user, today, onToast }) {
             </div>
           )}
           {data.stokLuar.konsumsiTakTertutup > 0 && (
-            <div className="rekap-warn">
-              ⚠️ Ada {data.stokLuar.konsumsiTakTertutup.toLocaleString('id-ID')} unit pemakaian yang melebihi stok tercatat — kemungkinan ada nota belum difinalisasi
-              "Masuk Stok" atau salah input jumlah. Nilainya tidak masuk HPP.
+            <div className="rekap-info">
+              ℹ️ Ada {data.stokLuar.konsumsiTakTertutup.toLocaleString('id-ID')} unit pemakaian yang tercatat saat app belum punya catatan stok untuk item itu —
+              umumnya karena pemakaian dicatat sebelum item pertama kali diopname. <b>Tidak memengaruhi rupiah</b>: barangnya stok lama, jadi memang tidak masuk HPP.
+              Perlu dicek hanya bila Anda curiga ada salah pilih item saat mencatat pemakaian.
             </div>
           )}
 
