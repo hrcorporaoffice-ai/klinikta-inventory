@@ -373,104 +373,82 @@ export async function getRekap(periode) {
   const costOf = (kode) => (avg[kode] != null) ? avg[kode] : (masterObj[kode] ? num(masterObj[kode].hargaAcuan) : 0)
   const kelompokOf = (r) => r.kelompok || (masterObj[r.kode] ? masterObj[r.kode].kelompok : 'Lainnya')
 
-  // Sejak Juli 2026 SEMUA barang masuk lewat menu Belanja. Jadi saat sebuah item
-  // pertama kali diopname, kelebihan fisik atas catatan sistem = stok yang sudah ada
-  // sebelum mekanisme belanja diberlakukan ("stok awal") — bukan koreksi pemakaian.
-  // Opname ke-2 dst: stok sudah terjangkar, selisih positif di situ variance sungguhan.
-  const opnamePertama = {}
+  // === MODEL DUA KANTONG ===
+  // Kantong BELANJA : barang yang masuk lewat fitur Belanja app. Punya harga perolehan
+  //   nyata dan BELUM pernah dibebankan → hanya kantong ini yang dinilai rupiah.
+  // Kantong LUAR    : stok yang tidak lewat Belanja (ketahuan sebagai kelebihan fisik
+  //   saat opname). Sudah habis dibebankan di LAPKEU lama, jadi hanya dihitung JUMLAH
+  //   unitnya — tanpa rupiah, supaya tidak terjadi pembebanan ganda.
+  // Konsumsi (pemakaian + susut) mengambil dari kantong LUAR dulu (barang lama dipakai
+  //   lebih dahulu / FIFO); sisanya baru membebani kantong BELANJA sebagai HPP.
+  const URUT = { masuk: 0, luar: 1, konsumsi: 2 } // pada tanggal sama: barang masuk dulu
+  const eventPerKode = {}
+  const addEvent = (kode, ev) => { if (kode && ev.tanggal) (eventPerKode[kode] = eventPerKode[kode] || []).push(ev) }
+  receivedMasuk(belanja).forEach((r) => addEvent(r.kode, { tanggal: fmtDate(r.tanggal), jenis: 'masuk', qty: num(r.jumlah) }))
+  pakaiAll.forEach((r) => addEvent(r.kode, { tanggal: fmtDate(r.tanggal), jenis: 'konsumsi', sumber: 'pakai', qty: num(r.jumlah) }))
   opnameAll.forEach((o) => {
-    const t = fmtDate(o.tanggal)
-    if (!o.kode || !t) return
-    const ada = opnamePertama[o.kode]
-    if (!ada || t < ada.tanggal || (t === ada.tanggal && num(o.ts) < ada.ts)) opnamePertama[o.kode] = { tanggal: t, ts: num(o.ts) }
-  })
-  const isOpnamePertama = (o) => {
-    const p = opnamePertama[o.kode]
-    return !!p && fmtDate(o.tanggal) === p.tanggal && num(o.ts) === p.ts
-  }
-
-  // HPP = nilai pemakaian + nilai selisih opname (keduanya pakai harga rata-rata tertimbang).
-  // Selisih opname aman digabung: stokSistem saat opname sudah memperhitungkan pemakaian
-  // tercatat, jadi selisih murni konsumsi/susut yang BELUM tercatat (tidak dobel hitung).
-  const pakaiQty = {}, selisihQty = {}, stokAwalQty = {}, kelOf = {}
-  pakaiAll.forEach((r) => {
-    if (fmtDate(r.tanggal).slice(0, 7) !== per || !r.kode) return
-    pakaiQty[r.kode] = (pakaiQty[r.kode] || 0) + num(r.jumlah)
-    kelOf[r.kode] = kelompokOf(r)
-  })
-  opnameAll.forEach((o) => {
-    if (fmtDate(o.tanggal).slice(0, 7) !== per || !o.kode) return
-    // Kelebihan fisik saat item PERTAMA kali diopname = stok awal (dipisah dari HPP).
-    if (num(o.selisih) > 0 && isOpnamePertama(o)) stokAwalQty[o.kode] = (stokAwalQty[o.kode] || 0) + num(o.selisih)
-    else selisihQty[o.kode] = (selisihQty[o.kode] || 0) + num(o.selisih)
-    if (!kelOf[o.kode]) kelOf[o.kode] = kelompokOf(o)
+    const s = num(o.selisih); if (!s) return
+    if (s > 0) addEvent(o.kode, { tanggal: fmtDate(o.tanggal), jenis: 'luar', qty: s })
+    else addEvent(o.kode, { tanggal: fmtDate(o.tanggal), jenis: 'konsumsi', sumber: 'susut', qty: -s })
   })
 
   const hpp = {}
-  const bucket = (g) => (hpp[g] = hpp[g] || { dariPakai: 0, dariSelisih: 0, kelebihanTakDinet: 0, stokAwal: 0 })
+  const bucket = (g) => (hpp[g] = hpp[g] || { dariPakai: 0, dariSusut: 0 })
   bucket('BHP'); bucket('Obat') // dua baris utama selalu ada agar bisa disalin walau 0
-  Object.keys(kelOf).forEach((kode) => {
+  const sisaBelanja = {}, sisaLuar = {}
+  let konsumsiTakTertutup = 0
+  Object.keys(eventPerKode).forEach((kode) => {
+    const kel = masterObj[kode] ? masterObj[kode].kelompok : 'Lainnya'
+    const grup = GRUP_HPP[kel] || kel
     const cost = costOf(kode)
-    const nilaiPakai = (pakaiQty[kode] || 0) * cost
-    // selisih < 0 (susut) → menambah HPP; selisih > 0 (stok lebih) → mengurangi HPP.
-    let kontrib = -(selisihQty[kode] || 0) * cost
-    let kelebihan = 0
-    // Batas aman: pengurangan HPP tak boleh melebihi nilai pemakaian item itu di periode
-    // yang sama. Kelebihan di atas itu hampir pasti barang yang sudah datang tapi notanya
-    // belum difinalisasi "Masuk Stok" — bukan koreksi pemakaian, jadi tidak dinet.
-    if (kontrib < 0 && -kontrib > nilaiPakai) { kelebihan = -kontrib - nilaiPakai; kontrib = -nilaiPakai }
-    const b = bucket(GRUP_HPP[kelOf[kode]] || kelOf[kode])
-    b.dariPakai += nilaiPakai
-    b.dariSelisih += kontrib
-    b.kelebihanTakDinet += kelebihan
-    b.stokAwal += (stokAwalQty[kode] || 0) * cost
+    let poolBelanja = 0, poolLuar = 0
+    eventPerKode[kode]
+      .filter((e) => e.tanggal <= hingga)
+      .sort((a, b) => (a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : URUT[a.jenis] - URUT[b.jenis]))
+      .forEach((e) => {
+        if (e.jenis === 'masuk') { poolBelanja += e.qty; return }
+        if (e.jenis === 'luar') { poolLuar += e.qty; return }
+        let sisa = e.qty
+        const dariLuar = Math.min(sisa, poolLuar); poolLuar -= dariLuar; sisa -= dariLuar
+        const dariBelanja = Math.min(sisa, poolBelanja); poolBelanja -= dariBelanja; sisa -= dariBelanja
+        if (sisa > 0) konsumsiTakTertutup += sisa
+        if (e.tanggal.slice(0, 7) !== per || dariBelanja <= 0) return
+        const b = bucket(grup)
+        if (e.sumber === 'susut') b.dariSusut += dariBelanja * cost
+        else b.dariPakai += dariBelanja * cost
+      })
+    sisaBelanja[kode] = poolBelanja
+    sisaLuar[kode] = poolLuar
   })
 
   const selisih = opnameAll
     .filter((o) => fmtDate(o.tanggal).slice(0, 7) === per && num(o.selisih) !== 0)
     .map((o) => ({ kode: o.kode, nama: o.nama, kelompok: o.kelompok, selisih: num(o.selisih), tanggal: fmtDate(o.tanggal) }))
 
-  // Stok awal KUMULATIF s/d akhir periode — ditemukan bertahap seiring tiap item
-  // diopname pertama kali. Dipakai untuk jurnal koreksi (Dr Persediaan / Cr Beban).
-  const stokAwalKum = {}
-  opnameAll.forEach((o) => {
-    const t = fmtDate(o.tanggal)
-    if (!o.kode || !t || t > hingga) return
-    if (num(o.selisih) <= 0 || !isOpnamePertama(o)) return
-    const g = GRUP_HPP[kelompokOf(o)] || kelompokOf(o)
-    stokAwalKum[g] = (stokAwalKum[g] || 0) + num(o.selisih) * costOf(o.kode)
+  // Nilai persediaan akhir = sisa kantong BELANJA saja (rupiah).
+  // Kantong LUAR dilaporkan jumlah unit & item saja, tanpa rupiah.
+  const akhirPerKelompok = {}, luarPerKelompok = {}
+  let totalAkhir = 0, totalUnitLuar = 0, totalItemLuar = 0
+  Object.keys(sisaBelanja).forEach((kode) => {
+    const m = masterObj[kode]
+    if (!m || !KELOMPOK_PERSEDIAAN[m.kelompok]) return
+    const nilai = sisaBelanja[kode] * costOf(kode)
+    akhirPerKelompok[m.kelompok] = (akhirPerKelompok[m.kelompok] || 0) + nilai
+    totalAkhir += nilai
+    const unit = sisaLuar[kode] || 0
+    if (unit > 0) {
+      const L = luarPerKelompok[m.kelompok] = luarPerKelompok[m.kelompok] || { unit: 0, item: 0 }
+      L.unit += unit; L.item++
+      totalUnitLuar += unit; totalItemLuar++
+    }
   })
-  // Item persediaan aktif yang belum pernah diopname → stok lamanya belum terhitung.
+  // Item persediaan aktif yang belum pernah diopname → stok lamanya belum ketahuan
+  // jumlahnya (tak berpengaruh ke rupiah, hanya kelengkapan hitungan unit).
   let itemBelumOpname = 0
   Object.values(masterObj).forEach((m) => {
     if (!m.kode || !KELOMPOK_PERSEDIAAN[m.kelompok]) return
     if (m.aktif === false || String(m.aktif) === 'false') return
-    if (!opnamePertama[m.kode]) itemBelumOpname++
-  })
-
-  // Nilai persediaan akhir periode = stok tersisa per item × harga rata-rata tertimbang.
-  // Stok dihitung "per akhir bulan": jangkar opname terakhir s/d tanggal itu, lalu
-  // ditambah masuk & dikurangi pakai sesudahnya (pola sama dengan getState).
-  const masukByK = rowsByKode(receivedMasuk(belanja))
-  const pakaiByK = rowsByKode(pakaiAll)
-  const opTerakhir = {}
-  opnameAll.forEach((o) => {
-    const t = fmtDate(o.tanggal)
-    if (!o.kode || !t || t > hingga) return
-    if (!opTerakhir[o.kode] || t >= opTerakhir[o.kode].tanggal) opTerakhir[o.kode] = { tanggal: t, stokFisik: num(o.stokFisik) }
-  })
-  const akhirPerKelompok = {}
-  let totalAkhir = 0
-  Object.values(masterObj).forEach((m) => {
-    if (!m.kode || !KELOMPOK_PERSEDIAAN[m.kelompok]) return
-    const op = opTerakhir[m.kode]
-    const sejak = op ? op.tanggal : ''
-    const stok = (op ? op.stokFisik : 0)
-      + sumRange(masukByK[m.kode], sejak, hingga)
-      - sumRange(pakaiByK[m.kode], sejak, hingga)
-    const nilai = stok * costOf(m.kode)
-    akhirPerKelompok[m.kelompok] = (akhirPerKelompok[m.kelompok] || 0) + nilai
-    totalAkhir += nilai
+    if (!opnameAll.some((o) => o.kode === m.kode)) itemBelumOpname++
   })
   const kelompokPersediaan = Object.keys(KELOMPOK_PERSEDIAAN)
 
@@ -487,20 +465,26 @@ export async function getRekap(periode) {
       totalBebanATK: Math.round(totalBebanATK),
       totalBebanOperasional: Math.round(totalBebanOperasional),
     },
-    stokAwal: {
-      perGrup: ['BHP', 'Obat'].map((g) => ({ kelompok: g, total: Math.round(stokAwalKum[g] || 0) })),
-      total: Math.round(Object.values(stokAwalKum).reduce((a, x) => a + x, 0)),
+    // Stok di luar fitur Belanja — JUMLAH saja, tanpa rupiah (sudah dibebankan di
+    // LAPKEU lama). Berkurang sendiri seiring barang lama terpakai.
+    stokLuar: {
+      perKelompok: kelompokPersediaan.map((k) => ({
+        kelompok: k,
+        unit: Math.round((luarPerKelompok[k] || {}).unit || 0),
+        item: (luarPerKelompok[k] || {}).item || 0,
+      })),
+      totalUnit: Math.round(totalUnitLuar),
+      totalItem: totalItemLuar,
       itemBelumOpname,
+      konsumsiTakTertutup: Math.round(konsumsiTakTertutup),
     },
     antrianAset: aset,
     hppPemakaian: Object.keys(hpp)
       .map((g) => ({
         kelompok: g,
-        total: Math.round(hpp[g].dariPakai + hpp[g].dariSelisih),
+        total: Math.round(hpp[g].dariPakai + hpp[g].dariSusut),
         dariPakai: Math.round(hpp[g].dariPakai),
-        dariSelisih: Math.round(hpp[g].dariSelisih),
-        kelebihanTakDinet: Math.round(hpp[g].kelebihanTakDinet),
-        stokAwal: Math.round(hpp[g].stokAwal),
+        dariSusut: Math.round(hpp[g].dariSusut),
       }))
       .sort((a, b) => (urutHpp[a.kelompok] ?? 9) - (urutHpp[b.kelompok] ?? 9)),
     selisihOpname: selisih,

@@ -57,8 +57,8 @@ export default function Rekap({ user, today, onToast }) {
           ))}
 
           <RekapRow
-            label="Nilai Persediaan Akhir (stok tersisa)"
-            akun={`Nilai stok BHP + Obat per ${data.hingga} — untuk neraca, bukan pengeluaran`}
+            label="Nilai Persediaan Akhir (dari fitur Belanja)"
+            akun={`Sisa stok yang dibeli lewat app per ${data.hingga} — untuk neraca, bukan pengeluaran`}
             value={data.persediaan.totalAkhir} onCopy={copy} />
           {data.persediaan.akhirPerKelompok.map((p) => (
             <RekapRow key={p.kelompok} small label={p.kelompok} value={p.total} onCopy={copy} />
@@ -92,48 +92,50 @@ export default function Rekap({ user, today, onToast }) {
             ))}
           </div>
 
-          {/* Bagian 1b — stok awal untuk jurnal koreksi */}
-          <h3 className="rekap-h">1b · Stok Awal sebelum mekanisme belanja</h3>
+          {/* Bagian 1b — stok di luar fitur Belanja: jumlah saja, tanpa rupiah */}
+          <h3 className="rekap-h">1b · Stok di luar fitur Belanja (jumlah saja)</h3>
           <p className="rekap-sub">
-            Kelebihan fisik saat item pertama kali diopname = barang yang sudah ada sebelum belanja dicatat di app.
-            Angka kumulatif s/d {data.hingga}. <b>Bukan beban</b> — ini penyesuaian aset persediaan (Dr Persediaan / Cr Beban pembelian periode lalu).
+            Stok yang tidak masuk lewat fitur Belanja — sudah dibebankan di LAPKEU lama, jadi <b>sengaja tidak dinilai rupiah</b> agar tidak dibebankan dua kali.
+            Sisa per {data.hingga}, berkurang sendiri seiring barang lama terpakai.
           </p>
-          <RekapRow
-            label="Total Stok Awal (BHP + Obat)"
-            akun="Untuk jurnal koreksi satu kali — bukan angka bulanan"
-            value={data.stokAwal.total} onCopy={copy} />
-          {data.stokAwal.perGrup.map((g) => (
-            <RekapRow key={g.kelompok} small label={`Stok Awal - ${g.kelompok}`} value={g.total} onCopy={copy} />
-          ))}
-          {data.stokAwal.itemBelumOpname > 0 && (
+          <div className="luar-list">
+            {data.stokLuar.perKelompok.map((g) => (
+              <div className="luar-row" key={g.kelompok}>
+                <span>{g.kelompok}</span>
+                <b>{g.unit.toLocaleString('id-ID')} unit <i className="muted">· {g.item} item</i></b>
+              </div>
+            ))}
+            <div className="luar-row total">
+              <span>Total sisa stok lama</span>
+              <b>{data.stokLuar.totalUnit.toLocaleString('id-ID')} unit <i className="muted">· {data.stokLuar.totalItem} item</i></b>
+            </div>
+          </div>
+          {data.stokLuar.itemBelumOpname > 0 && (
+            <div className="rekap-info">
+              ℹ️ {data.stokLuar.itemBelumOpname} item persediaan belum pernah diopname — stok lamanya belum ketahuan jumlahnya.
+              Tidak memengaruhi angka rupiah mana pun, hanya kelengkapan hitungan unit di atas.
+            </div>
+          )}
+          {data.stokLuar.konsumsiTakTertutup > 0 && (
             <div className="rekap-warn">
-              ⚠️ <b>{data.stokAwal.itemBelumOpname} item persediaan belum pernah diopname</b> — stok lamanya belum terhitung, jadi angka di atas <b>belum final</b>.
-              Opname item-item itu dulu sebelum membuat jurnal koreksi.
+              ⚠️ Ada {data.stokLuar.konsumsiTakTertutup.toLocaleString('id-ID')} unit pemakaian yang melebihi stok tercatat — kemungkinan ada nota belum difinalisasi
+              "Masuk Stok" atau salah input jumlah. Nilainya tidak masuk HPP.
             </div>
           )}
 
           {/* Bagian 2 */}
-          <h3 className="rekap-h">2 · Dari Pemakaian &amp; Selisih Opname (HPP)</h3>
-          <p className="rekap-sub">Nilai pemakaian + nilai selisih opname, dihitung dengan harga beli rata-rata tertimbang. Mencakup pemakaian internal maupun barang terjual.</p>
+          <h3 className="rekap-h">2 · HPP — pemakaian stok dari fitur Belanja</h3>
+          <p className="rekap-sub">
+            Hanya barang yang dibeli lewat fitur Belanja, dinilai harga perolehan nyata (rata-rata tertimbang).
+            Pemakaian stok lama tidak dihitung di sini karena sudah dibebankan di LAPKEU lama. Mencakup pemakaian internal maupun barang terjual.
+          </p>
           {data.hppPemakaian.map((h) => (
             <RekapRow key={h.kelompok}
               label={`HPP - ${h.kelompok}`}
               akun={`Akoontan: kategori HPP - ${h.kelompok}`}
-              sub={`pemakaian ${rupiah(h.dariPakai)} · selisih opname ${h.dariSelisih < 0 ? '−' : '+'}${rupiah(Math.abs(h.dariSelisih))}`}
+              sub={`pemakaian ${rupiah(h.dariPakai)} · susut opname ${rupiah(h.dariSusut)}`}
               value={h.total} onCopy={copy} />
           ))}
-          {data.hppPemakaian.some((h) => h.stokAwal > 0) && (
-            <div className="rekap-info">
-              ℹ️ Periode ini ditemukan <b>stok awal</b> senilai {rupiah(data.hppPemakaian.reduce((a, h) => a + h.stokAwal, 0))} dari item yang baru pertama kali diopname —
-              <b> tidak</b> dihitung sebagai HPP. Lihat bagian 1b.
-            </div>
-          )}
-          {data.hppPemakaian.some((h) => h.kelebihanTakDinet > 0) && (
-            <div className="rekap-warn">
-              ⚠️ Ada kelebihan stok saat opname senilai {rupiah(data.hppPemakaian.reduce((a, h) => a + h.kelebihanTakDinet, 0))} yang <b>tidak</b> dikurangkan dari HPP.
-              Kemungkinan ada nota yang barangnya sudah datang tapi belum difinalisasi "Masuk Stok" — cek Riwayat Belanja.
-            </div>
-          )}
 
           {/* Bagian 3 */}
           <h3 className="rekap-h">3 · Dari Opname (selisih)</h3>
