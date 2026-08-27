@@ -328,6 +328,7 @@ export async function getBelanja() {
     totalNota: num(b.totalNota), status: b.status,
     fotoUrl: b.fotoUrl || '', fakturUrl: b.fakturUrl || '',
     dipesanOleh: b.dipesanOleh, dibayarOleh: b.dibayarOleh, diterimaOleh: b.diterimaOleh, distokOleh: b.distokOleh,
+    dibatalkanOleh: b.dibatalkanOleh || '', alasanBatal: b.alasanBatal || '',
     catatan: b.catatan,
     items: b.items.map((it) => ({
       baris: num(it.baris), nama: it.nama, qty: num(it.qty), hargaSatuan: num(it.hargaSatuan),
@@ -674,6 +675,45 @@ export async function updateBelanjaStatus({ idBelanja, status, user, noVA, tangg
   if (fresh) mirror('mirror_belanja', belanjaToSheet(fresh))
   logActivity(user, 'Belanja → ' + status, (fresh && fresh.sumber) || idBelanja)
   return { idBelanja, status }
+}
+
+// Batalkan nota yang sudah Dibayar/Diterima tapi ternyata dibatalkan sepihak oleh
+// penjual/Shopee SETELAH tercatat dibayar. Admin saja (uang sudah tercatat keluar,
+// bukan keputusan satu peran biasa). Sengaja BUKAN untuk status Dipesan (pakai
+// deleteBelanja — belum ada apa pun yang perlu ditelusuri) maupun Masuk Stok (barang
+// sudah memengaruhi stok/HPP/persediaan; pembatalan di situ butuh koreksi manual,
+// bukan status flip sepihak — lihat Kelola Data di Rekap, atau Firebase Console).
+// Nota berstatus Dibatalkan TIDAK ikut terhitung di getRekap (hanya 'Masuk Stok' yang
+// dihitung), jadi aman terhadap LAPKEU: tidak perlu jurnal balik apa pun.
+export async function cancelBelanja({ idBelanja, user, alasan }) {
+  if (!idBelanja) throw new Error('idBelanja wajib.')
+  await requireAdmin(user)
+  const nota = await rdbGet('belanja/' + idBelanja)
+  if (!nota) throw new Error('Nota tidak ditemukan: ' + idBelanja)
+  if (nota.status === 'Dipesan') {
+    throw new Error('Nota masih Dipesan — belum ada yang perlu dibatalkan, gunakan Hapus.')
+  }
+  if (nota.status === 'Masuk Stok') {
+    throw new Error('Nota sudah Masuk Stok — barang telanjur memengaruhi stok & LAPKEU. Tidak bisa dibatalkan di sini; perlu koreksi manual (Kelola Data / Firebase Console).')
+  }
+  if (nota.status === 'Dibatalkan') {
+    throw new Error('Nota ini sudah dibatalkan sebelumnya.')
+  }
+  const jejak = `[Dibatalkan dari status ${nota.status} oleh ${user || '-'}${alasan ? ': ' + alasan : ''}]`
+  const upd = {
+    status: 'Dibatalkan',
+    dibatalkanOleh: user || '',
+    alasanBatal: alasan || '',
+    statusSebelumBatal: nota.status,
+    // Ikut ditulis ke 'catatan' (sudah dicerminkan ke sheet apa adanya) supaya jejak
+    // pembatalan tetap terlihat di spreadsheet tanpa perlu ubah header sheet/GAS.
+    catatan: (nota.catatan ? nota.catatan + ' ' : '') + jejak,
+  }
+  await rdbUpdate('belanja/' + idBelanja, upd)
+  const fresh = await rdbGet('belanja/' + idBelanja)
+  if (fresh) mirror('mirror_belanja', belanjaToSheet(fresh))
+  logActivity(user, 'Belanja Dibatalkan', `${nota.sumber || nota.supplier || idBelanja}${alasan ? ' · ' + alasan : ''}`)
+  return { idBelanja, status: 'Dibatalkan' }
 }
 
 export async function finalizeBelanja({ idBelanja, mappings = [], fakturUrl, user }) {
