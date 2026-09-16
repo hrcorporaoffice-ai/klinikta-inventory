@@ -40,6 +40,13 @@ const todayStr = () => {
 // Nama staf dipakai sebagai key RTDB — buang karakter terlarang (. # $ [ ] /).
 const keyify = (s) => String(s == null ? '' : s).replace(/[.#$/[\]]/g, '_')
 
+// Tanggal pengakuan finansial nota belanja — dipakai LAPKEU untuk menentukan periode
+// & urutan kronologis. Biasanya sama dengan tanggalTerima. KECUALI nota difinalisasi
+// SETELAH periode asalnya sudah dikunci (lihat finalizeBelanja) — dialihkan ke tanggal
+// finalisasi, supaya nilainya tak nyasar ke periode yang sudah dibekukan. tanggalTerima
+// sendiri TIDAK pernah diubah (tetap jujur soal kapan barang fisik diterima).
+const tanggalAkuiOf = (b) => fmtDate(b.tanggalAkui || b.tanggalTerima)
+
 const sumBy = (rows, keyField, valField) => {
   const out = {}
   rows.forEach((r) => { const k = r[keyField]; if (!k) return; out[k] = (out[k] || 0) + num(r[valField]) })
@@ -203,10 +210,14 @@ function receivedMasuk(belanja) {
 }
 
 // Harga beli rata-rata tertimbang per kode (dari item yang sudah masuk stok).
-function avgCostByKode(belanja) {
+// boundedTo (opsional, 'YYYY-MM-DD'): hanya hitung dari nota dengan tanggal pengakuan
+// s/d tanggal itu — dipakai saat menutup periode, supaya harga yang dibekukan mencerminkan
+// keadaan per AKHIR periode itu, bukan rata-rata hari ini yang terus bergerak.
+function avgCostByKode(belanja, boundedTo) {
   const qty = {}, val = {}
   belanja.forEach((b) => {
     if (String(b.status) !== 'Masuk Stok') return
+    if (boundedTo && tanggalAkuiOf(b) > boundedTo) return
     b.items.forEach((it) => {
       if (!it.kodeMaster) return
       qty[it.kodeMaster] = (qty[it.kodeMaster] || 0) + num(it.qty)
@@ -339,14 +350,16 @@ export async function getBelanja() {
   }))
 }
 
-export async function getRekap(periode) {
-  const per = periode || todayStr().slice(0, 7)
+// Inti perhitungan LAPKEU — dipakai baik untuk tampilan periode terbuka (live, harga
+// hari ini) maupun saat closePeriode menghitung snapshot beku (opts.boundedTo diisi
+// tanggal akhir periode, supaya harga yang dipakai mencerminkan keadaan saat itu).
+async function computeRekap(per, opts = {}) {
   const hingga = endOfMonth(per)
   const belanja = await belanjaArray()
   const masterObj = await masterByKode()
 
   const recv = {}
-  belanja.forEach((b) => { if (String(b.status) === 'Masuk Stok' && fmtDate(b.tanggalTerima).slice(0, 7) === per) recv[b.idBelanja] = b })
+  belanja.forEach((b) => { if (String(b.status) === 'Masuk Stok' && tanggalAkuiOf(b).slice(0, 7) === per) recv[b.idBelanja] = b })
 
   let totalPersediaan = 0, totalBebanAlkes = 0, totalBebanATK = 0, totalBebanOperasional = 0
   const beliPerKelompok = {}
@@ -368,7 +381,7 @@ export async function getRekap(periode) {
     .filter((a) => a.idAset && String(a.statusCatat) !== 'Sudah dicatat')
     .map((a) => ({ idAset: a.idAset, nama: a.nama, tanggalTerima: fmtDate(a.tanggalTerima), hargaTotal: num(a.hargaTotal), sumber: a.sumber }))
 
-  const avg = avgCostByKode(belanja)
+  const avg = avgCostByKode(belanja, opts.boundedTo)
   const pakaiAll = valuesOf(await rdbGet('pakai'))
   const opnameAll = valuesOf(await rdbGet('opname'))
   const costOf = (kode) => (avg[kode] != null) ? avg[kode] : (masterObj[kode] ? num(masterObj[kode].hargaAcuan) : 0)
@@ -385,7 +398,14 @@ export async function getRekap(periode) {
   const URUT = { masuk: 0, luar: 1, konsumsi: 2 } // pada tanggal sama: barang masuk dulu
   const eventPerKode = {}
   const addEvent = (kode, ev) => { if (kode && ev.tanggal) (eventPerKode[kode] = eventPerKode[kode] || []).push(ev) }
-  receivedMasuk(belanja).forEach((r) => addEvent(r.kode, { tanggal: fmtDate(r.tanggal), jenis: 'masuk', qty: num(r.jumlah) }))
+  // Tanggal masuk event pakai tanggalAkuiOf (bukan tanggalTerima mentah) — nota yang
+  // dialihkan pengakuannya (lihat finalizeBelanja) juga dialihkan urutan kronologisnya,
+  // supaya tidak mundur menutupi konsumsi di periode yang sudah terlanjur dikunci.
+  belanja.forEach((b) => {
+    if (String(b.status) !== 'Masuk Stok') return
+    const tgl = tanggalAkuiOf(b)
+    b.items.forEach((it) => { if (it.kodeMaster) addEvent(it.kodeMaster, { tanggal: tgl, jenis: 'masuk', qty: num(it.qty) }) })
+  })
   pakaiAll.forEach((r) => addEvent(r.kode, { tanggal: fmtDate(r.tanggal), jenis: 'konsumsi', sumber: 'pakai', qty: num(r.jumlah) }))
   opnameAll.forEach((o) => {
     const s = num(o.selisih); if (!s) return
@@ -426,8 +446,15 @@ export async function getRekap(periode) {
     .map((o) => ({ kode: o.kode, nama: o.nama, kelompok: o.kelompok, selisih: num(o.selisih), tanggal: fmtDate(o.tanggal) }))
 
   // Stok aktual per item per akhir periode — pola sama dengan getState: jangkar opname
-  // terakhir s/d tanggal itu, lalu tambah masuk & kurangi pakai SESUDAHNYA.
-  const masukByK = rowsByKode(receivedMasuk(belanja))
+  // terakhir s/d tanggal itu, lalu tambah masuk & kurangi pakai SESUDAHNYA. Pakai
+  // tanggalAkuiOf juga (konsisten dengan event-walk di atas), bukan tanggalTerima mentah.
+  const masukAkui = []
+  belanja.forEach((b) => {
+    if (String(b.status) !== 'Masuk Stok') return
+    const tgl = tanggalAkuiOf(b)
+    b.items.forEach((it) => { if (it.kodeMaster) masukAkui.push({ kode: it.kodeMaster, jumlah: num(it.qty), tanggal: tgl }) })
+  })
+  const masukByK = rowsByKode(masukAkui)
   const pakaiByK = rowsByKode(pakaiAll)
   const opTerakhir = {}
   opnameAll.forEach((o) => {
@@ -506,6 +533,58 @@ export async function getRekap(periode) {
       .sort((a, b) => (urutHpp[a.kelompok] ?? 9) - (urutHpp[b.kelompok] ?? 9)),
     selisihOpname: selisih,
   }
+}
+
+export async function getRekap(periode) {
+  const per = periode || todayStr().slice(0, 7)
+  // Periode yang sudah ditutup: kembalikan snapshot beku apa adanya, JANGAN dihitung
+  // ulang — itulah maksud "dikunci". Periode terbuka: hitung live seperti biasa.
+  const closed = await rdbGet('lapkeu_closed/' + per)
+  if (closed && closed.data) {
+    return { ...closed.data, terkunci: true, ditutupOleh: closed.ditutupOleh || '', ditutupTs: num(closed.ditutupTs) }
+  }
+  const data = await computeRekap(per)
+  return { ...data, terkunci: false }
+}
+
+// Tutup periode — ADMIN saja. Menghitung snapshot SEKALI pakai harga dibatasi s/d akhir
+// periode itu (bukan harga hari ini), lalu membekukannya permanen di lapkeu_closed/{periode}.
+// dryRun: true → hanya pratinjau (angka + daftar nota menggantung), TIDAK menulis apa pun —
+// dipakai UI untuk menampilkan ringkasan sebelum admin benar-benar mengonfirmasi.
+export async function closePeriode({ periode, user, dryRun }) {
+  if (!periode) throw new Error('periode wajib.')
+  await requireAdmin(user)
+  const existing = await rdbGet('lapkeu_closed/' + periode)
+  if (existing && !dryRun) throw new Error('Periode ' + periode + ' sudah ditutup sebelumnya.')
+
+  const hingga = endOfMonth(periode)
+  const data = await computeRekap(periode, { boundedTo: hingga })
+
+  // Nota berstatus Diterima dengan tanggal terima di periode ini SUDAH PASTI (tanggalTerima
+  // tak berubah lagi setelah Diterima) milik periode ini, tapi belum difinalisasi ke stok —
+  // menutup sekarang berarti nilainya nanti nyasar ke periode saat difinalisasi.
+  const belanja = await belanjaArray()
+  const notaMenggantung = belanja
+    .filter((b) => b.status === 'Diterima' && fmtDate(b.tanggalTerima).slice(0, 7) === periode)
+    .map((b) => ({ idBelanja: b.idBelanja, sumber: b.sumber || '', supplier: b.supplier || '', totalNota: num(b.totalNota), tanggalTerima: fmtDate(b.tanggalTerima) }))
+
+  if (dryRun) return { periode, dryRun: true, preview: data, notaMenggantung }
+
+  await rdbSet('lapkeu_closed/' + periode, { periode, data, ditutupOleh: user || '', ditutupTs: Date.now() })
+  logActivity(user, 'Tutup Periode LAPKEU', periode + (notaMenggantung.length ? ` · ${notaMenggantung.length} nota menggantung` : ''))
+  return { periode, closed: true, notaMenggantung }
+}
+
+// Buka kunci periode — ADMIN saja, untuk koreksi darurat. Setelah dibuka, periode itu
+// kembali dihitung live (harga hari ini) sampai ditutup ulang.
+export async function reopenPeriode({ periode, user }) {
+  if (!periode) throw new Error('periode wajib.')
+  await requireAdmin(user)
+  const existing = await rdbGet('lapkeu_closed/' + periode)
+  if (!existing) throw new Error('Periode ' + periode + ' belum ditutup.')
+  await rdbRemove('lapkeu_closed/' + periode)
+  logActivity(user, 'Buka Kunci Periode LAPKEU', periode)
+  return { periode, reopened: true }
 }
 
 // ---------------------------------------------------------------------------
@@ -744,6 +823,14 @@ export async function finalizeBelanja({ idBelanja, mappings = [], fakturUrl, use
   const upd = { status: 'Masuk Stok', distokOleh: user || '' }
   if (fakturUrl) upd.fakturUrl = fakturUrl
   if (!fmtDate(nota.tanggalTerima)) upd.tanggalTerima = todayStr()
+  // Kalau periode asal tanggalTerima ternyata sudah dikunci (nota telat difinalisasi),
+  // alihkan tanggal pengakuan finansialnya ke hari ini — supaya nilainya tetap terhitung
+  // (di periode berjalan) dan tidak menyentuh snapshot yang sudah dibekukan. tanggalTerima
+  // TETAP apa adanya untuk riwayat/operasional.
+  const tglTerimaFinal = upd.tanggalTerima || fmtDate(nota.tanggalTerima)
+  const periodeAsal = tglTerimaFinal.slice(0, 7)
+  const periodeSudahTutup = !!(await rdbGet('lapkeu_closed/' + periodeAsal))
+  if (periodeSudahTutup) upd.tanggalAkui = todayStr()
   await rdbUpdate('belanja/' + idBelanja, upd)
 
   await queueAssets(idBelanja)

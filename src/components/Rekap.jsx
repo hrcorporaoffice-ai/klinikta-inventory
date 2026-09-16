@@ -29,6 +29,42 @@ export default function Rekap({ user, today, onToast }) {
     } catch (e) { onToast('err', e.message) }
   }
 
+  const [closing, setClosing] = useState(false)
+
+  async function handleTutupPeriode() {
+    setClosing(true)
+    try {
+      const pre = await api.closePeriode({ periode, user: user.nama, dryRun: true })
+      const hppBHP = pre.preview.hppPemakaian.find((h) => h.kelompok === 'BHP')?.total || 0
+      const hppObat = pre.preview.hppPemakaian.find((h) => h.kelompok === 'Obat')?.total || 0
+      const menggantung = pre.notaMenggantung.length
+        ? `\n\n⚠️ ${pre.notaMenggantung.length} nota berstatus Diterima dengan tanggal terima di periode ini BELUM masuk stok:\n` +
+          pre.notaMenggantung.map((n) => `- ${n.sumber || n.supplier || n.idBelanja} (${rupiah(n.totalNota)})`).join('\n') +
+          '\n\nKalau ditutup sekarang, nilainya nanti tercatat di periode saat difinalisasi, bukan di periode ini.'
+        : '\n\nTidak ada nota yang menggantung untuk periode ini — aman ditutup.'
+      const ok = window.confirm(
+        `Tutup periode ${periode}?\n\n` +
+        `HPP - BHP: ${rupiah(hppBHP)}\nHPP - Obat: ${rupiah(hppObat)}\nPersediaan Akhir: ${rupiah(pre.preview.persediaan.totalAkhir)}` +
+        menggantung +
+        '\n\nSetelah ditutup, angka periode ini tidak akan berubah lagi apa pun yang terjadi sesudahnya.'
+      )
+      if (!ok) return
+      await api.closePeriode({ periode, user: user.nama, dryRun: false })
+      onToast('ok', `Periode ${periode} ditutup.`)
+      load()
+    } catch (e) { onToast('err', e.message) } finally { setClosing(false) }
+  }
+
+  async function handleBukaKunci() {
+    if (!window.confirm(`Buka kunci periode ${periode}? Angkanya akan kembali dihitung otomatis dan bisa berubah lagi.`)) return
+    setClosing(true)
+    try {
+      await api.reopenPeriode({ periode, user: user.nama })
+      onToast('ok', `Periode ${periode} dibuka kembali.`)
+      load()
+    } catch (e) { onToast('err', e.message) } finally { setClosing(false) }
+  }
+
   return (
     <div className="card">
       <div className="cap">
@@ -45,6 +81,18 @@ export default function Rekap({ user, today, onToast }) {
       ) : (
         <div className="rekap">
           <p className="rekap-note">Angka siap salin ke Akoontan (Level 1 — manual, ada mata manusia). Belum ada otomasi langsung.</p>
+
+          {data.terkunci ? (
+            <div className="rekap-locked">
+              <span>🔒 Periode ini <b>terkunci</b> — ditutup oleh {data.ditutupOleh || '-'} pada {new Date(data.ditutupTs).toLocaleDateString('id-ID')}. Angka di bawah tidak akan berubah lagi.</span>
+              {isAdmin && <button className="btn ghost sm" disabled={closing} onClick={handleBukaKunci}>Buka Kunci</button>}
+            </div>
+          ) : isAdmin && (
+            <div className="rekap-locked open">
+              <span>Periode ini masih terbuka — angka bisa berubah kalau ada transaksi baru yang menyentuh periode ini.</span>
+              <button className="btn ghost sm" disabled={closing} onClick={handleTutupPeriode}>{closing ? 'Memeriksa…' : '🔒 Tutup Periode Ini'}</button>
+            </div>
+          )}
 
           {/* Bagian 1 */}
           <h3 className="rekap-h">1 · Dari Belanja &amp; Terima</h3>
