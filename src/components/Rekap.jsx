@@ -12,7 +12,11 @@ export default function Rekap({ user, today, onToast }) {
 
   const load = useCallback(() => {
     setLoading(true); setError('')
-    api.getRekap(periode).then(setData).catch((e) => setError(e.message)).finally(() => setLoading(false))
+    // Jaga-jaga: field array yang boleh kosong tetap array walau sumbernya (mis. snapshot
+    // periode terkunci) kebetulan tak menyertakannya — render di bawah selalu mengasumsikan array.
+    api.getRekap(periode)
+      .then((d) => setData({ ...d, antrianAset: d.antrianAset || [], selisihOpname: d.selisihOpname || [] }))
+      .catch((e) => setError(e.message)).finally(() => setLoading(false))
   }, [periode])
   useEffect(() => { load() }, [load])
 

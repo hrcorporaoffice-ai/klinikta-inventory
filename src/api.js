@@ -541,7 +541,15 @@ export async function getRekap(periode) {
   // ulang — itulah maksud "dikunci". Periode terbuka: hitung live seperti biasa.
   const closed = await rdbGet('lapkeu_closed/' + per)
   if (closed && closed.data) {
-    return { ...closed.data, terkunci: true, ditutupOleh: closed.ditutupOleh || '', ditutupTs: num(closed.ditutupTs) }
+    // Firebase RTDB memangkas array KOSONG saat disimpan (mis. tak ada selisih opname /
+    // antrian aset di periode itu) — key-nya jadi hilang total, bukan []. Pulihkan di sini
+    // supaya render (yang mengasumsikan array) tidak crash untuk snapshot yang datanya sepi.
+    return {
+      ...closed.data,
+      antrianAset: closed.data.antrianAset || [],
+      selisihOpname: closed.data.selisihOpname || [],
+      terkunci: true, ditutupOleh: closed.ditutupOleh || '', ditutupTs: num(closed.ditutupTs),
+    }
   }
   const data = await computeRekap(per)
   return { ...data, terkunci: false }
