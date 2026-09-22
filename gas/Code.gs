@@ -38,11 +38,11 @@ var SHEETS = {
 // Status nota belanja, berurutan. Lihat alur peran di updateBelanjaStatus_/finalizeBelanja_.
 var STATUS_FLOW = ['Dipesan', 'Dibayar', 'Diterima', 'Masuk Stok'];
 // Kelompok yang dihitung sebagai Persediaan (aset lancar) di rekap LAPKEU.
-var KELOMPOK_PERSEDIAAN = { 'BHP Gigi': true, 'BHP Umum': true, 'Obat': true };
+var KELOMPOK_PERSEDIAAN = { 'BHP Gigi': true, 'BHP Umum': true, 'BHP Fisioterapi': true, 'Obat': true };
 // Semua kelompok stok yang valid sebagai tujuan saat "Masuk Stok".
-var KELOMPOK_STOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes', 'ATK'];
+var KELOMPOK_STOK = ['BHP Gigi', 'BHP Umum', 'BHP Fisioterapi', 'Obat', 'Alkes', 'ATK'];
 // Prefix kode item master baru per kelompok (untuk tambah item saat finalisasi).
-var KODE_PREFIX = { 'BHP Gigi': 'BHPG-', 'BHP Umum': 'BHPU-', 'Obat': 'OBT-', 'Alkes': 'ALK-', 'ATK': 'ATK-' };
+var KODE_PREFIX = { 'BHP Gigi': 'BHPG-', 'BHP Umum': 'BHPU-', 'BHP Fisioterapi': 'BHPF-', 'Obat': 'OBT-', 'Alkes': 'ALK-', 'ATK': 'ATK-' };
 
 var DRIVE_FOLDER_NAME = 'INVENTORY_KLINIKTA_Bukti'; // folder bukti faktur/foto (Drive terpisah)
 var PROP_FOLDER_ID = 'INVENTORY_DRIVE_FOLDER_ID';

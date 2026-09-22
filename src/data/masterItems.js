@@ -1357,4 +1357,4 @@ export const MASTER_ITEMS = [
   }
 ];
 
-export const KELOMPOK = ["BHP Gigi", "BHP Umum", "Obat"];
+export const KELOMPOK = ["BHP Gigi", "BHP Umum", "BHP Fisioterapi", "Obat"];

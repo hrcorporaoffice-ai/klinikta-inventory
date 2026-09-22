@@ -183,11 +183,16 @@ export default function Rekap({ user, today, onToast }) {
             Pemakaian stok lama tidak dihitung di sini karena sudah dibebankan di LAPKEU lama. Mencakup pemakaian internal maupun barang terjual.
           </p>
           {data.hppPemakaian.map((h) => (
-            <RekapRow key={h.kelompok}
-              label={`HPP - ${h.kelompok}`}
-              akun={`Akoontan: kategori HPP - ${h.kelompok}`}
-              sub={`pemakaian ${rupiah(h.dariPakai)} · susut opname ${rupiah(h.dariSusut)}`}
-              value={h.total} onCopy={copy} />
+            <React.Fragment key={h.kelompok}>
+              <RekapRow
+                label={`HPP - ${h.kelompok}`}
+                akun={`Akoontan: kategori HPP - ${h.kelompok}`}
+                sub={`pemakaian ${rupiah(h.dariPakai)} · susut opname ${rupiah(h.dariSusut)}`}
+                value={h.total} onCopy={copy} />
+              {h.rincian && h.rincian.length > 1 && h.rincian.map((r) => (
+                <RekapRow key={r.kelompok} small label={r.kelompok} value={r.total} onCopy={copy} />
+              ))}
+            </React.Fragment>
           ))}
 
           {/* Bagian 3 */}

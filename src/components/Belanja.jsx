@@ -481,10 +481,10 @@ function EditBelanja({ n, user, onToast, onDone }) {
   )
 }
 
-const TARGETS = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes', 'ATK', 'Operasional', 'Aset']
+const TARGETS = ['BHP Gigi', 'BHP Umum', 'BHP Fisioterapi', 'Obat', 'Alkes', 'ATK', 'Operasional', 'Aset']
 const TARGET_LABEL = { ATK: 'ATK & Perlengkapan Kantor', Operasional: 'Operasional (kebersihan/rumah tangga)' }
 // BHP & Obat butuh Batch + Tanggal Expired saat diterima.
-const needsBatch = (t) => t === 'BHP Gigi' || t === 'BHP Umum' || t === 'Obat'
+const needsBatch = (t) => t === 'BHP Gigi' || t === 'BHP Umum' || t === 'BHP Fisioterapi' || t === 'Obat'
 
 function Finalisasi({ n, user, masterList, keywords, onToast, onDone }) {
   // satu baris pemetaan per item nota

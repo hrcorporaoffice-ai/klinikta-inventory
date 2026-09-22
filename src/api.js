@@ -18,15 +18,16 @@ export const isConfigured = () => true
 // ---------------------------------------------------------------------------
 // Konstanta (disalin dari Code.gs)
 // ---------------------------------------------------------------------------
-const KELOMPOK_PERSEDIAAN = { 'BHP Gigi': true, 'BHP Umum': true, 'Obat': true }
-const KELOMPOK_STOK = ['BHP Gigi', 'BHP Umum', 'Obat', 'Alkes', 'ATK', 'Operasional']
-const KODE_PREFIX = { 'BHP Gigi': 'BHPG-', 'BHP Umum': 'BHPU-', 'Obat': 'OBT-', 'Alkes': 'ALK-', 'ATK': 'ATK-', 'Operasional': 'OPR-' }
+const KELOMPOK_PERSEDIAAN = { 'BHP Gigi': true, 'BHP Umum': true, 'BHP Fisioterapi': true, 'Obat': true }
+const KELOMPOK_STOK = ['BHP Gigi', 'BHP Umum', 'BHP Fisioterapi', 'Obat', 'Alkes', 'ATK', 'Operasional']
+const KODE_PREFIX = { 'BHP Gigi': 'BHPG-', 'BHP Umum': 'BHPU-', 'BHP Fisioterapi': 'BHPF-', 'Obat': 'OBT-', 'Alkes': 'ALK-', 'ATK': 'ATK-', 'Operasional': 'OPR-' }
 // Kelompok yang butuh Batch & Tanggal Expired saat diterima ke stok.
-const KELOMPOK_BATCH = { 'BHP Gigi': true, 'BHP Umum': true, 'Obat': true }
+const KELOMPOK_BATCH = { 'BHP Gigi': true, 'BHP Umum': true, 'BHP Fisioterapi': true, 'Obat': true }
 const STATUS_FLOW = ['Dipesan', 'Dibayar', 'Diterima', 'Masuk Stok']
-// Grup baris HPP di LAPKEU: BHP Gigi + BHP Umum dilaporkan sebagai satu "BHP"
-// (keduanya sama-sama ada yang dipakai internal maupun dijual — tidak dibedakan).
-const GRUP_HPP = { 'BHP Gigi': 'BHP', 'BHP Umum': 'BHP', 'Obat': 'Obat' }
+// Grup baris HPP di LAPKEU: semua kelompok BHP (Gigi/Umum/Fisioterapi) dilaporkan sebagai
+// satu "HPP - BHP" (sesuai kategori Akoontan) — rincian per kelompok ditampilkan terpisah
+// di UI (lihat rincianPerGrup di computeRekap), bukan sebagai baris HPP tersendiri.
+const GRUP_HPP = { 'BHP Gigi': 'BHP', 'BHP Umum': 'BHP', 'BHP Fisioterapi': 'BHP', 'Obat': 'Obat' }
 
 // ---------------------------------------------------------------------------
 // Util
@@ -128,7 +129,7 @@ function belanjaToSheet(nota) {
     dipesanOleh: nota.dipesanOleh || '', dibayarOleh: nota.dibayarOleh || '', diterimaOleh: nota.diterimaOleh || '', distokOleh: nota.distokOleh || '', catatan: nota.catatan || '',
   }
   const items = nota.items ? Object.values(nota.items).sort((a, c) => num(a.baris) - num(c.baris)).map((it) => ({
-    idBelanja: nota.idBelanja, baris: num(it.baris), nama: it.nama, qty: num(it.qty), hargaSatuan: num(it.hargaSatuan),
+    idBelanja: nota.idBelanja, tanggalPesan: fmtDate(nota.tanggalPesan), baris: num(it.baris), nama: it.nama, qty: num(it.qty), hargaSatuan: num(it.hargaSatuan),
     subtotalItem: num(it.subtotalItem), alokasiBiaya: num(it.alokasiBiaya), hargaRiilTotal: num(it.hargaRiilTotal),
     hargaRiilUnit: num(it.hargaRiilUnit), klasifikasi: it.klasifikasi || '', kodeMaster: it.kodeMaster || '', kelompok: it.kelompok || '',
     batch: it.batch || '', expired: it.expired || '',
@@ -416,6 +417,11 @@ async function computeRekap(per, opts = {}) {
   const hpp = {}
   const bucket = (g) => (hpp[g] = hpp[g] || { dariPakai: 0, dariSusut: 0 })
   bucket('BHP'); bucket('Obat') // dua baris utama selalu ada agar bisa disalin walau 0
+  // Rincian per KELOMPOK asli (BHP Gigi/Umum/Fisioterapi/Obat) — dipakai untuk tampilan
+  // breakdown di bawah baris "HPP - BHP" yang sudah digabung, tidak memengaruhi angka
+  // yang disalin ke Akoontan.
+  const hppPerKelompok = {}
+  const bucketKel = (k) => (hppPerKelompok[k] = hppPerKelompok[k] || { dariPakai: 0, dariSusut: 0 })
   const sisaBelanja = {}
   let konsumsiTakTertutup = 0
   Object.keys(eventPerKode).forEach((kode) => {
@@ -435,11 +441,16 @@ async function computeRekap(per, opts = {}) {
         if (sisa > 0) konsumsiTakTertutup += sisa
         if (e.tanggal.slice(0, 7) !== per || dariBelanja <= 0) return
         const b = bucket(grup)
-        if (e.sumber === 'susut') b.dariSusut += dariBelanja * cost
-        else b.dariPakai += dariBelanja * cost
+        const bk = bucketKel(kel)
+        if (e.sumber === 'susut') { b.dariSusut += dariBelanja * cost; bk.dariSusut += dariBelanja * cost }
+        else { b.dariPakai += dariBelanja * cost; bk.dariPakai += dariBelanja * cost }
       })
     sisaBelanja[kode] = poolBelanja
   })
+  // Kelompok mana saja yang tergabung ke tiap grup HPP (BHP -> Gigi/Umum/Fisioterapi, dst),
+  // diturunkan otomatis dari GRUP_HPP — dipakai untuk susunan baris rincian di bawah.
+  const rincianPerGrup = {}
+  Object.entries(GRUP_HPP).forEach(([kel, g]) => { (rincianPerGrup[g] = rincianPerGrup[g] || []).push(kel) })
 
   const selisih = opnameAll
     .filter((o) => fmtDate(o.tanggal).slice(0, 7) === per && num(o.selisih) !== 0)
@@ -529,6 +540,12 @@ async function computeRekap(per, opts = {}) {
         total: Math.round(hpp[g].dariPakai + hpp[g].dariSusut),
         dariPakai: Math.round(hpp[g].dariPakai),
         dariSusut: Math.round(hpp[g].dariSusut),
+        // Rincian per kelompok asli (selalu >=1 baris, tak pernah [] — aman dari Firebase
+        // RTDB yang memangkas array kosong saat snapshot periode disimpan).
+        rincian: (rincianPerGrup[g] || [g]).map((k) => ({
+          kelompok: k,
+          total: Math.round((hppPerKelompok[k]?.dariPakai || 0) + (hppPerKelompok[k]?.dariSusut || 0)),
+        })),
       }))
       .sort((a, b) => (urutHpp[a.kelompok] ?? 9) - (urutHpp[b.kelompok] ?? 9)),
     selisihOpname: selisih,
