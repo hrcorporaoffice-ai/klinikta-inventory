@@ -497,6 +497,12 @@ function Badge({ status }) {
   return <span className={'badge ' + cls}>{txt}</span>
 }
 
+// Harga beli rata-rata per satuan (dari pembelian lewat fitur Belanja), untuk semua staf.
+function HargaRata({ it }) {
+  if (it.hargaRata == null) return <span className="harga-rata muted">harga rata² belum ada</span>
+  return <span className="harga-rata">rata² Rp {new Intl.NumberFormat('id-ID').format(it.hargaRata)}{it.satuan ? `/${it.satuan}` : ''}</span>
+}
+
 function StokLabel({ it }) {
   return (
     <span className="stk">{it.stok} <span className="unit">{it.satuan}</span> <Badge status={it.status} /></span>
@@ -526,7 +532,7 @@ function DesktopTable({ grouped, mode, inputs, setQty }) {
                     {it.nama}
                     {it.metode === 'Detail' && <span className="tag-detail">DETAIL</span>}
                   </div>
-                  <div className="item-sub">{it.satuan}{it.kemasan && it.kemasan !== '-' ? ` · ${it.kemasan}` : ''}</div>
+                  <div className="item-sub">{it.satuan}{it.kemasan && it.kemasan !== '-' ? ` · ${it.kemasan}` : ''} · <HargaRata it={it} /></div>
                 </td>
                 <td><StokLabel it={it} /></td>
                 {mode === 'pakai' && (
@@ -574,6 +580,7 @@ function MobileList({ grouped, mode, inputs, setQty, stepQty }) {
               <div className="mcard" key={it.kode}>
                 <div className="info">
                   <div className="n">{it.nama}{it.metode === 'Detail' && <span className="tag-detail">DETAIL</span>}</div>
+                  <div className="s"><HargaRata it={it} /></div>
                   <div className="s">
                     {mode === 'opname' ? <>sistem {it.stok} {it.satuan}</> : <>{it.stok} {it.satuan}</>} <Badge status={it.status} />
                     {mode === 'opname' && inputs[it.kode] !== '' && inputs[it.kode] != null && !isNaN(Number(inputs[it.kode])) && (

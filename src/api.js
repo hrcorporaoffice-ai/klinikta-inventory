@@ -264,6 +264,7 @@ export async function getState(kelompok, tanggal) {
 
   const masukByKode = sumBy(masuk, 'kode', 'jumlah')
   const pakaiByKode = sumBy(pakai, 'kode', 'jumlah')
+  const avg = avgCostByKode(belanja)
 
   const lastOpname = {}
   opname.forEach((r) => {
@@ -294,6 +295,8 @@ export async function getState(kelompok, tanggal) {
       kategoriProduk: m.kategoriProduk, subKategori: m.subKategori,
       satuan: m.satuan, kemasan: m.kemasan,
       hargaAcuan: num(m.hargaAcuan), kategoriDefault: m.kategoriDefault,
+      // Harga beli rata-rata tertimbang dari pembelian lewat fitur Belanja (null = belum pernah dibeli lewat app).
+      hargaRata: avg[k] != null ? Math.round(avg[k]) : null,
       metode: m.metode || 'Praktis', titikReorder: reorder,
       stok, pakaiHariIni: pakaiToday[k] || 0, status: stockStatus(stok, reorder),
     }

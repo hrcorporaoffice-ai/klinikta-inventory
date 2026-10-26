@@ -92,6 +92,8 @@ tbody tr:hover{background:#fafcff}
 .grp td{padding:7px 12px}
 .item-name{font-weight:600;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .item-sub{font-size:11.5px;color:var(--muted)}
+.harga-rata{font-size:11.5px;color:var(--navy);font-weight:600;font-variant-numeric:tabular-nums}
+.harga-rata.muted{color:var(--muted);font-weight:400}
 .stk{display:inline-flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
 .badge{font-size:11px;padding:2px 7px;border-radius:20px;font-weight:600}
 .badge.ok{background:#e7f6ef;color:var(--ok)}
