@@ -503,6 +503,19 @@ function HargaRata({ it }) {
   return <span className="harga-rata">rata² Rp {new Intl.NumberFormat('id-ID').format(it.hargaRata)}{it.satuan ? `/${it.satuan}` : ''}</span>
 }
 
+// Tanggal kedaluwarsa terdekat (perkiraan FIFO dari stok yang masih ada) + penanda warna.
+// Tak ditampilkan bila item tidak punya data tanggal sama sekali (opsional).
+const BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
+function Kedaluwarsa({ it }) {
+  if (!it.expired) return null
+  const [y, m, d] = it.expired.split('-').map(Number)
+  const now = new Date()
+  const hari = Math.round((Date.UTC(y, m - 1, d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000)
+  const cls = hari < 0 ? 'lewat' : hari <= 30 ? 'segera' : hari <= 90 ? 'dekat' : 'aman'
+  const label = hari < 0 ? 'Kedaluwarsa' : hari === 0 ? 'hari ini' : `${hari} hari lagi`
+  return <span className={'exp ' + cls}>{d} {BULAN[m - 1]} {y} <b>[ {label} ]</b></span>
+}
+
 function StokLabel({ it }) {
   return (
     <span className="stk">{it.stok} <span className="unit">{it.satuan}</span> <Badge status={it.status} /></span>
@@ -533,6 +546,7 @@ function DesktopTable({ grouped, mode, inputs, setQty }) {
                     {it.metode === 'Detail' && <span className="tag-detail">DETAIL</span>}
                   </div>
                   <div className="item-sub">{it.satuan}{it.kemasan && it.kemasan !== '-' ? ` · ${it.kemasan}` : ''} · <HargaRata it={it} /></div>
+                  {it.expired && <div className="item-sub"><Kedaluwarsa it={it} /></div>}
                 </td>
                 <td><StokLabel it={it} /></td>
                 {mode === 'pakai' && (
@@ -581,6 +595,7 @@ function MobileList({ grouped, mode, inputs, setQty, stepQty }) {
                 <div className="info">
                   <div className="n">{it.nama}{it.metode === 'Detail' && <span className="tag-detail">DETAIL</span>}</div>
                   <div className="s"><HargaRata it={it} /></div>
+                  {it.expired && <div className="s"><Kedaluwarsa it={it} /></div>}
                   <div className="s">
                     {mode === 'opname' ? <>sistem {it.stok} {it.satuan}</> : <>{it.stok} {it.satuan}</>} <Badge status={it.status} />
                     {mode === 'opname' && inputs[it.kode] !== '' && inputs[it.kode] != null && !isNaN(Number(inputs[it.kode])) && (

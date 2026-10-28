@@ -124,7 +124,9 @@ function BrandPanel({ user, onToast, onSaved }) {
 }
 
 // ---------------- Master ----------------
-const emptyItem = { kode: '', nama: '', kelompok: 'BHP Gigi', subKategori: '', satuan: '', kemasan: '', hargaAcuan: '', metode: 'Praktis', titikReorder: 1, aktif: true }
+const emptyItem = { kode: '', nama: '', kelompok: 'BHP Gigi', subKategori: '', satuan: '', kemasan: '', hargaAcuan: '', metode: 'Praktis', titikReorder: 1, aktif: true, expiredManual: '' }
+// Kelompok yang dilacak stoknya (punya tab harian) — hanya ini yang relevan untuk tanggal kedaluwarsa.
+const KELOMPOK_STOK_HARIAN = ['BHP Gigi', 'BHP Umum', 'BHP Fisioterapi', 'Obat']
 
 function MasterAdmin({ user, onToast }) {
   const [items, setItems] = useState(null)
@@ -191,7 +193,18 @@ function MasterAdmin({ user, onToast }) {
           <label>Metode<select value={edit.metode} onChange={(e) => setEdit({ ...edit, metode: e.target.value })}><option>Praktis</option><option>Detail</option></select></label>
           <label>Titik reorder<input type="number" min="0" value={edit.titikReorder} onChange={(e) => setEdit({ ...edit, titikReorder: e.target.value })} /></label>
           <label>Aktif<select value={edit.aktif ? '1' : '0'} onChange={(e) => setEdit({ ...edit, aktif: e.target.value === '1' })}><option value="1">Aktif</option><option value="0">Nonaktif</option></select></label>
+          {KELOMPOK_STOK_HARIAN.includes(edit.kelompok) && (
+            <label>Kedaluwarsa stok tanpa tanggal (opsional)
+              <input type="date" value={edit.expiredManual || ''} onChange={(e) => setEdit({ ...edit, expiredManual: e.target.value })} />
+            </label>
+          )}
         </div>
+        {KELOMPOK_STOK_HARIAN.includes(edit.kelompok) && (
+          <p className="muted sm" style={{ margin: '4px 0 0' }}>
+            Dipakai untuk stok yang tidak punya tanggal kedaluwarsa tercatat — stok lama sebelum fitur Belanja, atau pembelian yang dulu tidak diisi tanggalnya.
+            Kosongkan untuk menghapus. Tanggal dari pembelian lewat app tetap dipakai otomatis.
+          </p>
+        )}
         <div className="bsave">
           {edit.kode && <button className="btn danger" disabled={busy} onClick={del} style={{ marginRight: 'auto' }}>Hapus</button>}
           <button className="btn ghost" onClick={() => setEdit(null)}>Batal</button>

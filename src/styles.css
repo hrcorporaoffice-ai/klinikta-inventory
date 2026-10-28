@@ -94,6 +94,12 @@ tbody tr:hover{background:#fafcff}
 .item-sub{font-size:11.5px;color:var(--muted)}
 .harga-rata{font-size:11.5px;color:var(--navy);font-weight:600;font-variant-numeric:tabular-nums}
 .harga-rata.muted{color:var(--muted);font-weight:400}
+.exp{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:20px;font-variant-numeric:tabular-nums;margin-top:2px}
+.exp b{font-weight:600}
+.exp.lewat{background:var(--red);color:#fff}
+.exp.segera{background:#fff0e0;color:#c45c00}
+.exp.dekat{background:#fdf6e3;color:#9a7300}
+.exp.aman{background:#e7f6ef;color:var(--ok)}
 .stk{display:inline-flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
 .badge{font-size:11px;padding:2px 7px;border-radius:20px;font-weight:600}
 .badge.ok{background:#e7f6ef;color:var(--ok)}

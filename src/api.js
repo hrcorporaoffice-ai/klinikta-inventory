@@ -266,6 +266,38 @@ export async function getState(kelompok, tanggal) {
   const pakaiByKode = sumBy(pakai, 'kode', 'jumlah')
   const avg = avgCostByKode(belanja)
 
+  // Batch per kode (dari nota Masuk Stok, pakai tanggal terima fisik) untuk perkiraan
+  // tanggal kedaluwarsa stok yang masih ada.
+  const batchByKode = {}
+  belanja.forEach((b) => {
+    if (String(b.status) !== 'Masuk Stok') return
+    b.items.forEach((it) => {
+      if (!it || !it.kodeMaster) return
+      ;(batchByKode[it.kodeMaster] = batchByKode[it.kodeMaster] || [])
+        .push({ tanggal: fmtDate(b.tanggalTerima), qty: num(it.qty), expired: fmtDate(it.expired) })
+    })
+  })
+  // FIFO: barang lama terpakai duluan, jadi stok yang tersisa diperkirakan berasal dari
+  // pembelian TERBARU. Ambil batch terbaru s/d jumlahnya menutup stok sekarang, lalu pilih
+  // tanggal kedaluwarsa TERDEKAT di antaranya. Bagian stok tanpa tanggal tercatat (stok lama
+  // di luar pembelian app, atau batch yang dulu dikosongkan) memakai tanggal manual admin.
+  const perkiraanExpired = (kode, stok, manual) => {
+    if (stok <= 0) return null
+    const batches = (batchByKode[kode] || []).slice().sort((a, b) => (a.tanggal < b.tanggal ? 1 : a.tanggal > b.tanggal ? -1 : 0))
+    let sisa = stok, adaTanpaTanggal = false
+    const tanggal = []
+    for (const bt of batches) {
+      if (sisa <= 0) break
+      if (bt.qty <= 0) continue
+      sisa -= Math.min(bt.qty, sisa)
+      if (bt.expired) tanggal.push(bt.expired)
+      else adaTanpaTanggal = true
+    }
+    if (sisa > 0) adaTanpaTanggal = true
+    if (adaTanpaTanggal && manual) tanggal.push(fmtDate(manual))
+    return tanggal.length ? tanggal.sort()[0] : null
+  }
+
   const lastOpname = {}
   opname.forEach((r) => {
     const k = r.kode; if (!k) return
@@ -297,6 +329,8 @@ export async function getState(kelompok, tanggal) {
       hargaAcuan: num(m.hargaAcuan), kategoriDefault: m.kategoriDefault,
       // Harga beli rata-rata tertimbang dari pembelian lewat fitur Belanja (null = belum pernah dibeli lewat app).
       hargaRata: avg[k] != null ? Math.round(avg[k]) : null,
+      // Tanggal kedaluwarsa terdekat dari stok yang diperkirakan masih ada (null = tak ada data).
+      expired: perkiraanExpired(k, stok, m.expiredManual),
       metode: m.metode || 'Praktis', titikReorder: reorder,
       stok, pakaiHariIni: pakaiToday[k] || 0, status: stockStatus(stok, reorder),
     }
@@ -319,6 +353,7 @@ export async function getMasterAll() {
       satuan: m.satuan, kemasan: m.kemasan, hargaAcuan: num(m.hargaAcuan),
       metode: m.metode || 'Praktis', titikReorder: num(m.titikReorder),
       aktif: !(m.aktif === false || String(m.aktif) === 'false'),
+      expiredManual: fmtDate(m.expiredManual),
     }))
 }
 
@@ -912,6 +947,7 @@ async function createMasterItem(kelompok, d) {
     satuan: d.satuan || '', kemasan: d.kemasan || '', hargaAcuan: num(d.hargaAcuan),
     kategoriDefault: defaultKategori(kelompok), metode: d.metode || 'Praktis',
     titikReorder: (d.titikReorder === '' || d.titikReorder == null) ? 1 : num(d.titikReorder), aktif: true,
+    expiredManual: fmtDate(d.expiredManual),
   })
   mirrorMasterFull()
   return kode
@@ -1039,6 +1075,7 @@ export async function saveMaster({ user, item = {} }) {
       hargaAcuan: num(item.hargaAcuan), metode: item.metode || 'Praktis',
       titikReorder: (item.titikReorder === '' || item.titikReorder == null) ? '' : num(item.titikReorder),
       aktif: item.aktif !== false,
+      expiredManual: fmtDate(item.expiredManual),
     })
     mirrorMasterFull()
     logActivity(user, 'Edit Master', item.kode + ' ' + item.nama)
