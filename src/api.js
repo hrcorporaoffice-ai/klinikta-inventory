@@ -1054,7 +1054,19 @@ export async function deleteOpname({ user, id }) {
 // ---------------------------------------------------------------------------
 export async function login({ nama, pin }) {
   if (!nama || pin == null || pin === '') throw new Error('Nama dan PIN wajib diisi.')
-  const u = await rdbGet('users/' + keyify(nama))
+  let u
+  try {
+    // Batas waktu: saat sinyal HP buruk, Firebase menunggu tanpa gagal — layar diam di
+    // "Memeriksa…" selamanya. Setelah 12 dtk tampilkan pesan koneksi supaya bisa dicoba lagi.
+    u = await Promise.race([
+      rdbGet('users/' + keyify(nama)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout membaca data staf')), 12000)),
+    ])
+  } catch (e) {
+    console.error('Login: gagal membaca data staf', e)
+    // Bedakan masalah koneksi dari PIN salah, supaya staf tak mengira PIN-nya yang keliru.
+    throw new Error('Tidak bisa terhubung ke server. Periksa internet HP lalu coba lagi — PIN belum diperiksa.')
+  }
   if (!u || u.aktif === false || String(u.aktif) === 'false') throw new Error('Staf tidak ditemukan / tidak aktif.')
   if (String(u.pin) !== String(pin)) throw new Error('PIN salah.')
   return { nama: u.nama || nama, kelompok: u.kelompok || 'BHP Gigi', peran: u.peran || 'staf' }
