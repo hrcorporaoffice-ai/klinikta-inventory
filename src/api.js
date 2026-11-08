@@ -1052,6 +1052,14 @@ export async function deleteOpname({ user, id }) {
 // ---------------------------------------------------------------------------
 // AUTH
 // ---------------------------------------------------------------------------
+// Catat percobaan login yang PIN-nya tidak cocok ke log Aktivitas (admin). Yang disimpan
+// HANYA metadata untuk diagnosa — panjang input, jenis input (ketik/isi otomatis/tempel),
+// dan jenis perangkat — TIDAK PERNAH isi PIN. Best-effort: kegagalan mencatat diabaikan.
+export function logLoginGagal({ nama, panjang, inputType }) {
+  const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '').slice(0, 110)
+  return logActivity(nama, 'Login gagal', `PIN tidak cocok · ${panjang} digit · input: ${inputType || '?'} · ${ua}`)
+}
+
 export async function login({ nama, pin }) {
   if (!nama || pin == null || pin === '') throw new Error('Nama dan PIN wajib diisi.')
   let u

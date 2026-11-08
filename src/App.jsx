@@ -386,6 +386,7 @@ function Login({ brand = BRAND_DEFAULT, onLogin }) {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const pinRef = useRef(null)
+  const inputTypeRef = useRef('') // jenis input terakhir (ketik / isi otomatis / tempel) — untuk diagnosa
 
   useEffect(() => {
     const USERS_TTL = 15 * 60 * 1000
@@ -416,11 +417,13 @@ function Login({ brand = BRAND_DEFAULT, onLogin }) {
       onLogin(u)
     } catch (e2) {
       setErr(e2.message); setBusy(false); setPin('')
+      if (e2.message === 'PIN salah.') api.logLoginGagal({ nama: loginNama, panjang: String(loginPin).length, inputType: inputTypeRef.current })
       setTimeout(() => pinRef.current?.focus(), 50)
     }
   }
 
   function handlePinChange(e) {
+    inputTypeRef.current = e.nativeEvent?.inputType || 'tanpa-jenis'
     const val = e.target.value.replace(/\D/g, '').slice(0, 4)
     setPin(val); setErr('')
     if (val.length === 4 && nama && !busy) doLogin(nama, val)
@@ -470,8 +473,11 @@ function Login({ brand = BRAND_DEFAULT, onLogin }) {
                     <input
                       ref={pinRef}
                       className="pin-overlay-input"
-                      type="password" inputMode="numeric"
-                      autoComplete="off" maxLength={4}
+                      type="text" inputMode="numeric" pattern="[0-9]*"
+                      name="kode-akses-inv" id="kode-akses-inv"
+                      autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+                      data-lpignore="true" data-1p-ignore="true" data-form-type="other"
+                      maxLength={4}
                       value={pin} onChange={handlePinChange}
                     />
                   </div>
